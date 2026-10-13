@@ -56,6 +56,40 @@ await ctx.fiber.dispose() // runs every registered effect
 
 A runnable version lives in [`examples/hello`](./examples/hello) (`pnpm smoke`).
 
+## Dev kit (`/dev`)
+
+The `/dev` subpath ships the assembly-and-workflow toolkit behind a real
+`pnpm dev` / `pnpm build` experience — one registry drives module mounting, the
+static bundle table, and build orchestration; a managed vite child process
+gives your dev server frontend HMR without handing it the port:
+
+```ts
+import { ModuleRegistry, buildRegisteredModules, createViteHmrBridge } from '@ling2/ling-cordis/dev'
+
+// 1) one registry, three consumers (mounting / static table / builds)
+const registry = new ModuleRegistry(['core', 'tail'])
+registry.add({
+  id: 'my-plugin', phase: 'tail', note: 'example module',
+  client: { key: 'my-plugin/client.js' },        // → static bundle table entry
+  mount: async (ctx, env) => { await ctx.plugin(MyPlugin, { env }) },
+})
+for (const mod of registry.ofPhase('core')) await mod.mount?.(ctx, env)
+
+// 2) vite dev child process: HTTP proxy + WebSocket upgrade passthrough
+const hmr = createViteHmrBridge({ cwd: 'web-app', port: 5174 })
+await hmr.ready
+// http handler:   if (!hmr.proxyHttp(req, res, req.url)) serveStaticDist(req, res)
+// 'upgrade':      if (!hmr.proxyUpgrade(req, socket, head)) socket.destroy()
+// hmr.port === 0 means inactive (vite missing / child exited) → fall back to dist
+
+// 3) registry-driven builds: full / targeted / carrier target / skipCarrier
+buildRegisteredModules({ registry, rootDir, carrier: { id: 'web', cwd: 'web-app', script: 'build' } })
+```
+
+Claim order stays yours: the bridge never owns your server — you call
+`proxyHttp` / `proxyUpgrade` and keep other handlers (auth, bridges, static)
+in front. vite itself is your peer dependency; the package adds none.
+
 ## Modules
 
 | Path | What it is | Upstream origin |
@@ -65,6 +99,7 @@ A runnable version lives in [`examples/hello`](./examples/hello) (`pnpm smoke`).
 | `src/schema` | callable schema builder + validation | schemastery |
 | `src/plugins/timer.ts` | timer mixins plugin | cordis-plugin-timer |
 | `src/plugins/logger-console` | console exporter plugin | cordis-plugin-logger-console |
+| `src/dev` | dev kit: module registry, vite HMR bridge, build orchestration | original (this repo) |
 
 ## Concepts
 
@@ -79,7 +114,7 @@ A runnable version lives in [`examples/hello`](./examples/hello) (`pnpm smoke`).
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest (39 cases)
+pnpm test        # vitest (60 cases)
 pnpm build       # tsdown (bundled JS) + tsc (per-module d.ts tree)
 pnpm check:dts   # compile the external-consumer type smoke against dist/
 pnpm smoke       # boot examples/hello end-to-end

@@ -55,6 +55,39 @@ await ctx.fiber.dispose() // 执行全部已登记的 effect
 
 可运行版本见 [`examples/hello`](./examples/hello)（`pnpm smoke`）。
 
+## 开发工具族（`/dev`）
+
+`/dev` 子出口承载"装配 + 开发工作流"工具族——一份注册表同时驱动模块挂载、
+浏览器产物静态表与编译编排；外加代管的 vite 子进程，让 dev 服务器不改端口
+就获得前端 HMR：
+
+```ts
+import { ModuleRegistry, buildRegisteredModules, createViteHmrBridge } from '@ling2/ling-cordis/dev'
+
+// ① 一份注册表三处消费（挂载 / 静态表 / 编译）
+const registry = new ModuleRegistry(['core', 'tail'])
+registry.add({
+  id: 'my-plugin', phase: 'tail', note: '示例模块',
+  client: { key: 'my-plugin/client.js' },        // → 静态通道表条目
+  mount: async (ctx, env) => { await ctx.plugin(MyPlugin, { env }) },
+})
+for (const mod of registry.ofPhase('core')) await mod.mount?.(ctx, env)
+
+// ② vite dev 子进程：HTTP 反代 + WebSocket 升级透传
+const hmr = createViteHmrBridge({ cwd: 'web-app', port: 5174 })
+await hmr.ready
+// http 处理器：   if (!hmr.proxyHttp(req, res, req.url)) 走静态 dist
+// 'upgrade' 事件：if (!hmr.proxyUpgrade(req, socket, head)) socket.destroy()
+// hmr.port === 0 = 未激活（vite 缺席 / 子进程退出）→ 回落静态产物
+
+// ③ 按注册表编译：全量 / 指名 / 载体特名 / skipCarrier
+buildRegisteredModules({ registry, rootDir, carrier: { id: 'web', cwd: 'web-app', script: 'build' } })
+```
+
+认领顺序归你：桥从不接管你的服务器——由你调用 `proxyHttp` / `proxyUpgrade`，
+其他处理器（认证、桥、静态面）仍在你手里排在前面。vite 是使用方的对等件，
+本包零新增依赖。
+
 ## 模块
 
 | 路径 | 内容 | 上游来源 |
@@ -64,6 +97,7 @@ await ctx.fiber.dispose() // 执行全部已登记的 effect
 | `src/schema` | 可调用 Schema 构建器与校验 | schemastery |
 | `src/plugins/timer.ts` | 定时混入插件 | cordis-plugin-timer |
 | `src/plugins/logger-console` | 控制台导出器插件 | cordis-plugin-logger-console |
+| `src/dev` | 开发工具族：模块注册表 / vite HMR 桥 / 编译编排 | 原创（本仓） |
 
 ## 概念
 
@@ -78,7 +112,7 @@ await ctx.fiber.dispose() // 执行全部已登记的 effect
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest（39 例）
+pnpm test        # vitest（60 例）
 pnpm build       # tsdown 打包 JS + tsc 直出 d.ts 模块树
 pnpm check:dts   # 以外部消费者视角编译 dist 类型冒烟
 pnpm smoke       # 端到端启动 examples/hello

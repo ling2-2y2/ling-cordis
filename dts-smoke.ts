@@ -1,10 +1,12 @@
 /**
  * dts 冒烟消费者——以外部使用者视角验证打包产物类型面：
  * ①聚合入口符号可解析；②相对模块增强并入 Context（fiber 的 effect、events 的 on、
- * timer 的 setInterval/timeout）；③schemastery 全局命名空间在场。
+ * timer 的 setInterval/timeout）；③schemastery 全局命名空间在场；
+ * ④/dev 子出口三件（注册表/HMR 桥/编译编排）类型可导。
  * 由 CI 在 build 之后独立编译（不在 tsconfig.json include 面内，防止源码态混入）。
  */
 import { Context, Fiber, schemastery as z } from './dist/index.js'
+import { buildRegisteredModules, createViteHmrBridge, ModuleRegistry, type ModuleEntry, type ViteHmrBridge } from './dist/dev/index.js'
 
 /** fiber/events 增强面：ctx.effect 与 ctx.on 应存在于 Context 接口。 */
 function face(ctx: Context) {
@@ -32,4 +34,24 @@ function schema(fiber: Fiber) {
   return { config, state, probe }
 }
 
-export const _checks = { face, timer, schema }
+/** /dev 工具族出口：注册表（含 TEnv 泛型与 mount 面型）/HMR 桥/编译编排类型可导。 */
+function devKit() {
+  interface MountEnv { pgUrl: string }
+  const registry = new ModuleRegistry<MountEnv>(['core', 'tail'])
+  const entry: ModuleEntry<MountEnv> = {
+    id: 'pkg-a', phase: 'core', note: '冒烟',
+    client: { key: 'pkg-a/client.js' },
+    mount: async (_ctx: Context, env: MountEnv) => { void env.pgUrl },
+  }
+  registry.add(entry)
+  const table: Record<string, string> = registry.clientTable('/tree')
+  const bridge: ViteHmrBridge = createViteHmrBridge({ cwd: '/app', port: 5174 })
+  void bridge.port
+  void bridge.ready
+  void bridge.proxyHttp
+  void bridge.proxyUpgrade
+  buildRegisteredModules({ registry, rootDir: '/tree', targets: ['pkg-a'] })
+  return { table }
+}
+
+export const _checks = { face, timer, schema, devKit }
