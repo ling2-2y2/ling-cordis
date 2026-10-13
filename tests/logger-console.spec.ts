@@ -33,6 +33,17 @@ describe('LoggerConsole 插件', () => {
     await ctx.fiber.dispose()
   })
 
+  it('showTime 关闭时输出无时间前缀（[I] 直起）', async () => {
+    const ctx = new Context()
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await ctx.plugin(LoggerConsole, { colors: false, showTime: '' })
+    ctx.logger('plain').info('no-time')
+    const rendered = log.mock.calls.flat().join(' ')
+    expect(rendered.trim().startsWith('[I]')).toBe(true)
+    expect(rendered).not.toMatch(/\d{4}-\d{2}-\d{2}/u)
+    await ctx.fiber.dispose()
+  })
+
   it('与 Timer 共存装配（boot 场景最小面）', async () => {
     const ctx = new Context()
     vi.spyOn(console, 'log').mockImplementation(() => {})

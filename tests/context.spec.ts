@@ -3,7 +3,7 @@
  * @module @ling2/ling-cordis/tests/context
  */
 import { describe, expect, it } from 'vitest'
-import { Context, EventsService, RegistryService } from '../src/index.ts'
+import { Context, EventsService, RegistryService, Service } from '../src/index.ts'
 
 describe('Context', () => {
   it('Context.is() 跨领域品牌判定（Symbol.for）', () => {
@@ -30,6 +30,26 @@ describe('Context', () => {
     const ctx = new Context()
     const scoped = ctx.isolate('probe')
     expect(Context.is(scoped)).toBe(true)
+  })
+
+  it('isolate 域内重提供同名服务不影响父作用域', async () => {
+    const parent = new Context()
+    class SvcA extends Service {
+      static inject = [] as const
+      constructor(c: Context) { super(c, 'iso-svc'); this.mark = 'parent' }
+      mark: string
+    }
+    class SvcB extends Service {
+      static inject = [] as const
+      constructor(c: Context) { super(c, 'iso-svc'); this.mark = 'child' }
+      mark: string
+    }
+    await parent.plugin(SvcA)
+    const child = parent.isolate('iso-svc')
+    await child.plugin(SvcB)
+    expect((child.get('iso-svc') as SvcB).mark).toBe('child')
+    expect((parent.get('iso-svc') as SvcA).mark).toBe('parent')
+    await parent.fiber.dispose()
   })
 
   it('effect() 登记的清理回调随根 fiber dispose 执行', async () => {

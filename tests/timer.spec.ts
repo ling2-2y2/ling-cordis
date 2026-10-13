@@ -63,4 +63,23 @@ describe('Timer 插件', () => {
     expect(atDispose).toBeGreaterThan(0)
     expect(fired).toBe(atDispose)
   })
+
+  it('interval(delay) 迭代器形态：next() 逐拍取值，return() 收尾后终结', async () => {
+    const ctx = new Context()
+    await ctx.plugin(Timer)
+    const iterator = ctx.interval(20)
+    const first = await iterator.next()
+    expect(first.done).toBe(false)
+    await iterator.return?.()
+    const after = await iterator.next()
+    expect(after.done).toBe(true)
+    await ctx.fiber.dispose()
+  })
+
+  it('timeout(delay) promise 形态正常到点 resolve', async () => {
+    const ctx = new Context()
+    await ctx.plugin(Timer)
+    await expect(ctx.timeout(10)).resolves.toBeUndefined()
+    await ctx.fiber.dispose()
+  })
 })

@@ -27,6 +27,34 @@ describe('事件总线', () => {
     await ctx.fiber.dispose()
   })
 
+  it('on() 返回注销器：注销后不再收到事件', async () => {
+    const ctx = new Context()
+    let fired = 0
+    const dispose = ctx.on('test/order', () => { fired += 1 })
+    ctx.emit('test/order', 1)
+    expect(fired).toBe(1)
+    dispose()
+    ctx.emit('test/order', 2)
+    expect(fired).toBe(1)
+    await ctx.fiber.dispose()
+  })
+
+  it('serial：异步监听器按注册序串行执行', async () => {
+    const ctx = new Context()
+    const order: number[] = []
+    ctx.on('test/async', async (v) => {
+      await new Promise(resolve => setTimeout(resolve, 20 - v * 2))
+      order.push(v)
+    })
+    ctx.on('test/async', async (v) => {
+      await new Promise(resolve => setTimeout(resolve, 1))
+      order.push(v * 10)
+    })
+    await ctx.serial('test/async', 5)
+    expect(order).toEqual([5, 50])
+    await ctx.fiber.dispose()
+  })
+
   it('once：只触发一次', async () => {
     const ctx = new Context()
     let fired = 0
