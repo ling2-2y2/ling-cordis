@@ -36,6 +36,8 @@ export interface RpcAuthOptions {
 export interface JsonRpcGatewayOptions {
   /** RPC 会话门（缺省=auth.resolve 路线；两者皆无=裸奔，慎用）。 */
   resolveSession?: (req: IncomingMessage) => Promise<unknown>
+  /** 登录态确立回调（会话验签通过后随 token 调用——审计上下文/身份绑定挂点）。 */
+  onSession?: (token: string, session: unknown) => void
   /** 命名空间表（每次分派现取；配合 adopt 实现惰性收编）。 */
   faces: () => Map<string, RpcFaceEntry>
   /** 首查未中钩子（收编后再查一次；典型=启动后面注册）。 */
@@ -117,13 +119,17 @@ async function readJson(raw: string): Promise<Record<string, unknown>> {
 
 /** 建 JSON-RPC 网关内核（认领 /api/auth/* 与 /api/<ns>/<method>；未命中返回 false）。 */
 export function createJsonRpcGateway(options: JsonRpcGatewayOptions): DevHttpHandler {
-  const { faces, adopt, auth } = options
+  const { faces, adopt, auth, onSession } = options
   const cookieName = auth?.cookie ?? 'token'
   const resolveSession = options.resolveSession
     ?? (auth === undefined ? undefined : async (req: IncomingMessage) => {
       const token = readToken(req, cookieName)
       if (token === '') return undefined
-      try { return await auth.resolve(token) } catch { return undefined }
+      try {
+        const session = await auth.resolve(token)
+        if (session !== undefined && session !== null && onSession !== undefined) onSession(token, session)
+        return session
+      } catch { return undefined }
     })
 
   return async function jsonRpcGateway(req, res): Promise<boolean> {

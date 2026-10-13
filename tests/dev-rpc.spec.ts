@@ -36,8 +36,10 @@ function setup() {
     markers: [{ method: 'list' }, { method: 'boom' }, { method: 'slow' }],
   }]])
   const tokens = new Map([['t-ok', { account: 'admin' }]])
+  const sessions: string[] = []
   const handle = createJsonRpcGateway({
     faces: () => faces,
+    onSession: (token, session) => { sessions.push(`${token}:${String((session as { account?: string }).account)}`) },
     auth: {
       cookie: 'dsh_satoken',
       login: async (account, password) => (account === 'admin' && password === '123456' ? { token: 't-ok', account } : { token: '' }),
@@ -45,7 +47,7 @@ function setup() {
       logout: async (token) => { tokens.delete(token) },
     },
   })
-  return { handle, faces }
+  return { handle, faces, sessions }
 }
 
 /** 跑一对请求/应答并返回 {status, body}。 */
@@ -73,13 +75,15 @@ describe('createJsonRpcGateway', () => {
     expect(bad.status).toBe(401)
   })
 
-  it('会话门：无令牌 401；有效令牌放行到方法调用（参数按名绑定）', async () => {
-    const { handle } = setup()
+  it('会话门：无令牌 401；有效令牌放行到方法调用（参数按名绑定）；onSession 登录态回调', async () => {
+    const { handle, sessions } = setup()
     const denied = await call(handle, 'POST', '/api/users/list', { args: { page: 2 } })
     expect(denied.status).toBe(401)
     expect((denied.json().error as { code: string }).code).toBe('gateway/unauthorized')
+    expect(sessions).toEqual([])
     const granted = await call(handle, 'POST', '/api/users/list', { args: { page: 2 } }, { satoken: 't-ok' })
     expect(granted.json()).toEqual({ ok: true, value: { page: 2, rows: ['a', 'b'] } })
+    expect(sessions).toEqual(['t-ok:admin'])
   })
 
   it('面/方法未注册=404 带指路；信封请求回信封应答（错误折叠 code）', async () => {
