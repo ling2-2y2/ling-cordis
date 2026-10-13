@@ -6,7 +6,7 @@
  * 由 CI 在 build 之后独立编译（不在 tsconfig.json include 面内，防止源码态混入）。
  */
 import { Context, Fiber, schemastery as z } from './dist/index.js'
-import { buildRegisteredModules, createJsonRpcGateway, createViteHmrBridge, defineApp, loadEnv, ModuleRegistry, parameterNamesOf, registryOf, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type JsonRpcGatewayOptions, type ModuleEntry, type RpcFaceEntry, type ViteHmrBridge } from './dist/dev/index.js'
+import { buildRegisteredModules, createJsonRpcGateway, createRpcFace, createViteHmrBridge, defineApp, loadEnv, ModuleRegistry, parameterNamesOf, registryOf, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type JsonRpcGatewayOptions, type ModuleEntry, type RpcContext, type RpcFaceEntry, type RpcHook, type ViteHmrBridge } from './dist/dev/index.js'
 
 /** fiber/events 增强面：ctx.effect 与 ctx.on 应存在于 Context 接口。 */
 function face(ctx: Context) {
@@ -69,6 +69,16 @@ function devKit() {
   }
   const rpc = createJsonRpcGateway(rpcOptions)
   void rpc
+  // 生命周期钩子（v4）：RpcHook/RpcContext 类型面 + createRpcFace 对象挂件
+  const accessLog: RpcHook = {
+    name: '冒烟钩子',
+    beforeRequest: (c: RpcContext) => { void c.pathname },
+    afterRequest: (c: RpcContext) => { if (c.namespace === 'pkg-a') c.value = 1 },
+  }
+  const face = createRpcFace({ ...rpcOptions, hooks: [accessLog], healthz: () => ({ faces: 1 }) })
+  void face.ready
+  void face.dispose
+  void face.healthz
   const names: string[] = parameterNamesOf({ run: () => 0 } as object, 'run', 'pkg-a/run')
   return { table, names }
 }

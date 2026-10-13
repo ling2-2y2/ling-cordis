@@ -9,7 +9,7 @@
  * @module @ling2/ling-cordis/examples/dev-app/ling.config
  */
 import { fileURLToPath } from 'node:url'
-import { createJsonRpcGateway, defineApp } from '../../src/dev/index.ts'
+import { createRpcFace, defineApp } from '../../src/dev/index.ts'
 
 /** 动态 import 说明符（file:// URL——Windows 裸盘符路径非合法 ESM 说明符）。 */
 const spec = (path) => new URL(path, import.meta.url).href
@@ -39,23 +39,27 @@ export default defineApp({
   ],
 
   // JSON-RPC 网关：内存凭据 demo/123456（真实项目换成自家鉴权 λ——satoken 等）。
-  // 对象形态挂接（handle + healthz 附加位——面计数进健康检查）。
+  // createRpcFace 对象形态=钩子生命周期挂件（ready/dispose 派发 onReady/onDestroy，
+  // healthz 附加位进健康检查）；hooks=扩展点示范（访问日志——before/after 各一行）。
   // 三个面同表登记：demo/demo1/demo2——前端跨模块=换命名空间即达；
   // 后端跨模块在 demo2.report 内部经 ctx.get('demo1') 穿透（见 plugins/demo2.ts）。
-  http: (ctx) => [{
-    handle: createJsonRpcGateway({
-      faces: () => new Map([
-        ['demo', { service: ctx.get('greet'), markers: [{ method: 'hello' }, { method: 'add' }] }],
-        ['demo1', { service: ctx.get('demo1'), markers: [{ method: 'double' }, { method: 'label' }] }],
-        ['demo2', { service: ctx.get('demo2'), markers: [{ method: 'report' }] }],
-      ]),
-      auth: {
-        login: async (account, password) => (account === 'demo' && password === '123456' ? { token: 't-demo', account } : { token: '' }),
-        resolve: async (token) => (token === 't-demo' ? { account: 'demo' } : undefined),
-      },
-    }),
+  http: (ctx) => [createRpcFace({
+    faces: () => new Map([
+      ['demo', { service: ctx.get('greet'), markers: [{ method: 'hello' }, { method: 'add' }] }],
+      ['demo1', { service: ctx.get('demo1'), markers: [{ method: 'double' }, { method: 'label' }] }],
+      ['demo2', { service: ctx.get('demo2'), markers: [{ method: 'report' }] }],
+    ]),
+    auth: {
+      login: async (account, password) => (account === 'demo' && password === '123456' ? { token: 't-demo', account } : { token: '' }),
+      resolve: async (token) => (token === 't-demo' ? { account: 'demo' } : undefined),
+    },
+    hooks: [{
+      name: '访问日志',
+      beforeRequest: (c) => { console.log(`[demo] → ${c.method} ${c.pathname}`) },
+      afterRequest: (c) => { if (c.namespace !== undefined) console.log(`[demo] ← ${c.namespace}/${c.methodName} ok`) },
+    }],
     healthz: () => ({ faces: 3 }),
-  }],
+  })],
 
   onReady: ({ port }) => { console.log(`[demo] 浏览器打开 http://127.0.0.1:${port}/ 试：登录 demo/123456 → 调 demo.hello`) },
 })

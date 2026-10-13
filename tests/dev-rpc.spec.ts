@@ -6,7 +6,7 @@
  */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
-import { createJsonRpcGateway, parameterNamesOf, type RpcFaceEntry } from '../src/dev/index.ts'
+import { createJsonRpcGateway, createRpcFace, parameterNamesOf, type RpcFaceEntry } from '../src/dev/index.ts'
 
 /** 最小请求仿真（headers/url/method/body 三段）。 */
 function fakeReq(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): EventEmitter & { method: string; url: string; headers: Record<string, string>; socket: { remoteAddress?: string } } {
@@ -113,5 +113,81 @@ describe('parameterNamesOf', () => {
     expect(parameterNamesOf(new Probe(), 'none', 'p/none')).toEqual([])
     class Broken { broken({ a }: { a: number }) { return a } }
     expect(() => parameterNamesOf(new Broken(), 'broken', 'p/broken')).toThrow(/唯一标识符/)
+  })
+})
+
+describe('RpcHook 生命周期', () => {
+  it('用户钩子先于内置策略：认领止链（公开路由不被会话门拦）；未认领全链透传到门', async () => {
+    const order: string[] = []
+    const handle = createJsonRpcGateway({
+      faces: () => new Map([['users', { service: new UsersFace(), markers: [{ method: 'list' }] }]]),
+      hooks: [
+        {
+          name: 'public-routes',
+          beforeRequest: (c) => {
+            order.push(`h1:${c.pathname}`)
+            if (c.pathname !== '/api/public/ping' || c.method !== 'POST') return false
+            c.res.writeHead(200, { 'content-type': 'application/json' })
+            c.res.end('{"ok":true,"value":"pong"}')
+            return true
+          },
+        },
+        { name: 'observer', beforeRequest: (c) => { order.push('h2') } },
+      ],
+      auth: {
+        login: async (account) => ({ token: account }),
+        resolve: async (token) => (token === 't-ok' ? { account: 'admin' } : undefined),
+      },
+    })
+    const pong = await call(handle, 'POST', '/api/public/ping', {})
+    expect(pong.claimed).toBe(true)
+    expect(pong.json()).toEqual({ ok: true, value: 'pong' })
+    expect(order).toEqual(['h1:/api/public/ping']) // 认领即止：h2/内置门未跑
+    const denied = await call(handle, 'POST', '/api/users/list', { args: {} })
+    expect(denied.status).toBe(401) // 门在用户钩子之后拒未登录
+    expect(order).toEqual(['h1:/api/public/ping', 'h1:/api/users/list', 'h2'])
+  })
+
+  it('afterRequest 改写 value；onError 改写 failure（发送取改写值）', async () => {
+    const handle = createJsonRpcGateway({
+      faces: () => new Map([['users', { service: new UsersFace(), markers: [{ method: 'list' }, { method: 'boom' }] }]]),
+      auth: {
+        login: async (account) => ({ token: account }),
+        resolve: async (token) => (token === 't-ok' ? { account: 'admin' } : undefined),
+      },
+      hooks: [
+        { afterRequest: (c) => { if (c.namespace === 'users' && c.methodName === 'list') c.value = 43 } },
+        { onError: (c) => { c.failure = { code: 'REWRITTEN', message: '钩子改写' } } },
+      ],
+    })
+    const granted = await call(handle, 'POST', '/api/users/list', { args: { page: 1 } }, { satoken: 't-ok' })
+    expect(granted.json()).toEqual({ ok: true, value: 43 })
+    const boom = await call(handle, 'POST', '/api/users/boom', { args: {} }, { satoken: 't-ok' })
+    expect(boom.json()).toEqual({ ok: false, error: { code: 'REWRITTEN', message: '钩子改写' } })
+  })
+
+  it('会话门正则与分派形状一致：未成形 POST /api/x 不被门拦（不认领，404 归外层）', async () => {
+    const handle = createJsonRpcGateway({
+      faces: () => new Map(),
+      auth: { login: async (a) => ({ token: a }), resolve: async () => undefined },
+    })
+    const malformed = await call(handle, 'POST', '/api/only-namespace', {})
+    expect(malformed.claimed).toBe(false)
+  })
+
+  it('createRpcFace：healthz 透传；ready/dispose 派发钩子 onReady/onDestroy', async () => {
+    const events: string[] = []
+    const face = createRpcFace({
+      faces: () => new Map(),
+      hooks: [
+        { onReady: () => { events.push('ready') } },
+        { onDestroy: () => { events.push('destroy') } },
+      ],
+      healthz: () => ({ faces: 9 }),
+    })
+    expect(face.healthz?.()).toEqual({ faces: 9 })
+    await face.ready?.()
+    await face.dispose?.()
+    expect(events).toEqual(['ready', 'destroy'])
   })
 })

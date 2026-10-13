@@ -159,6 +159,13 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 （浏览器开 http://127.0.0.1:8390/）；`pnpm demo:check` 一条命令自检全链
 （登录 → RPC 参数绑定 → 会话门 → healthz → 静态 SPA）即退——验货最快路径。
 
+**网关策略=生命周期钩子，非硬编码。** JSON-RPC 内核把机械（管线编排、请求
+上下文）与 wire 策略（认证三端点、会话门、信封应答）分开——后者是内置**可拔**
+钩子。`hooks: [{ beforeRequest, afterRequest, onError }]` 扩展（axios 拦截器 /
+vite 插件钩子同位概念；用户钩子先行，公开路由可绕会话门）；`createRpcFace`
+把完整生命周期（`onInit`/`onReady`/`onDestroy`）接进 `runDevApp` 的挂件槽位。
+ALS 型包裹类关注（请求级上下文传播）需嵌套语义——在 handle 外组合。
+
 ## 模块
 
 | 路径 | 内容 | 上游来源 |

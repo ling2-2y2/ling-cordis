@@ -2,6 +2,13 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.4.0] - 2026-10-13
+
+### 新增
+
+- **JSON-RPC 网关内核生命周期钩子化**（机械层/策略层分离）：`RpcHook`（`onInit`/`onReady`/`beforeRequest`/`afterRequest`/`onError`/`onDestroy`，axios 拦截器 / vite 插件钩子同位概念）+ `RpcContext` 请求上下文（贯穿钩子链与分派核心，自定义槽开放）；认证三端点与会话门降为**内置可拔钩子**（用户钩子先行——公开路由可绕门；门正则与分派形状一致零漂移）；`createRpcFace` 对象挂件把 onReady/onDestroy 接进 `runDevApp` 新增的挂件 `ready` 槽（listen 后、config.onReady 前派发）。`createJsonRpcGateway` 既有 options 全兼容（兼容证=既有测试不动全绿）。ALS 型包裹类关注（请求级上下文传播）需嵌套语义，留在 handle 外组合——文档明示。
+- 测试 +4（钩子顺序与认领止链/afterRequest 改写 value/onError 改写 failure/createRpcFace 生命周期派发），总数 78；demo 网关换 `createRpcFace`+访问日志钩子活示范。
+
 ## [Unreleased]
 
 ### 新增
@@ -72,6 +79,7 @@
 - 修复 4 处存量类型层错误（fiber.ts/utils.ts，纯类型断言，零运行时变更）。
 - 模块增强改指向定义文件（`declare module '../core/context.ts'`，与 cordis 核心内部写法一致）。
 
+[1.4.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.4.0
 [1.3.1]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.2.1

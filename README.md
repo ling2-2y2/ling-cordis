@@ -164,6 +164,16 @@ self-tests the whole chain (login → RPC arg binding → session gate → healt
 static SPA) and exits — that one command is the fastest way to judge the
 experience.
 
+**Gateway policies are lifecycle hooks, not hardcode.** The JSON-RPC kernel
+splits mechanics (pipeline orchestration, request context) from wire policies
+(auth trio, session gate, envelope shaping) — the latter are built-in
+*removable* hooks. Extend with `hooks: [{ beforeRequest, afterRequest, onError }]`
+(axios-interceptor / vite-plugin style; user hooks run first so public routes
+can bypass the session gate), and `createRpcFace` wires the full lifecycle
+(`onInit` / `onReady` / `onDestroy`) into `runDevApp`'s face slots. ALS-style
+wrapping concerns (request-scoped context propagation) keep nesting semantics —
+compose them around the handle.
+
 ## Modules
 
 | Path | What it is | Upstream origin |

@@ -51,13 +51,15 @@ export interface DevAppEntry extends Omit<ModuleEntry, 'mount'> {
 /** HTTP 面处理器（认领=true 止链）。 */
 export type DevHttpHandler = (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>
 
-/** HTTP 面挂件对象形态（带升级/停机/健康位的网关走此形态）。 */
+/** HTTP 面挂件对象形态（带升级/就绪/停机/健康位的网关走此形态）。 */
 export interface DevHttpFaceObject {
   /** HTTP 处理器（认领=true 止链）。 */
   handle?: DevHttpHandler
   /** ws 升级处理器（认领=true 止链；先于 HMR 透传）。 */
   upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean
-  /** 停机清理器（HMR/fiber 清理之前调用）。 */
+  /** 就绪回调（listen+自检之后、config.onReady 之前派发——钩子 onReady 通道）。 */
+  ready?: () => void | Promise<void>
+  /** 停机清理器（HMR/fiber 清理之前调用——钩子 onDestroy 通道）。 */
   dispose?: () => void | Promise<void>
   /** healthz 附加位（并进应答体）。 */
   healthz?: () => Record<string, unknown>
@@ -197,16 +199,18 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     }
   }
 
-  // HTTP 面挂件收集（纯处理器或对象形态四槽分拣）
+  // HTTP 面挂件收集（纯处理器或对象形态五槽分拣）
   const faces = config.http === undefined ? [] : await config.http(ctx)
   const handlers: DevHttpHandler[] = []
   const upgraders: NonNullable<DevHttpFaceObject['upgrade']>[] = []
+  const readyBits: NonNullable<DevHttpFaceObject['ready']>[] = []
   const faceDisposers: NonNullable<DevHttpFaceObject['dispose']>[] = []
   const healthzBits: (() => Record<string, unknown>)[] = []
   for (const face of faces) {
     if (typeof face === 'function') { handlers.push(face); continue }
     if (face.handle !== undefined) handlers.push(face.handle)
     if (face.upgrade !== undefined) upgraders.push(face.upgrade)
+    if (face.ready !== undefined) readyBits.push(face.ready)
     if (face.dispose !== undefined) faceDisposers.push(face.dispose)
     if (face.healthz !== undefined) healthzBits.push(face.healthz)
   }
@@ -314,6 +318,8 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   )
   if ((health as { ok?: boolean })?.ok !== true) throw new Error(`[${label}] healthz 应答异常: ${JSON.stringify(health)}`)
   console.log(`[${label}] ready http://${host}:${port}/`)
+  // 挂件就绪派发（钩子 onReady 通道）先于配置 onReady（种子跑批等收尾件）
+  for (const ready of readyBits) await ready()
   await config.onReady?.({ port, host, label })
   console.log(`[${label}] 进程常驻（Ctrl+C 收敛——有界停机）`)
 
