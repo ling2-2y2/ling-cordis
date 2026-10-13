@@ -137,7 +137,7 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest（69 例）
+pnpm test        # vitest（74 例）
 pnpm build       # tsdown 打包 JS + tsc 直出 d.ts 模块树
 pnpm check:dts   # 以外部消费者视角编译 dist 类型冒烟
 pnpm smoke       # 端到端启动 examples/hello

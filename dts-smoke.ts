@@ -6,7 +6,7 @@
  * 由 CI 在 build 之后独立编译（不在 tsconfig.json include 面内，防止源码态混入）。
  */
 import { Context, Fiber, schemastery as z } from './dist/index.js'
-import { buildRegisteredModules, createViteHmrBridge, defineApp, loadEnv, ModuleRegistry, registryOf, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type ModuleEntry, type ViteHmrBridge } from './dist/dev/index.js'
+import { buildRegisteredModules, createJsonRpcGateway, createViteHmrBridge, defineApp, loadEnv, ModuleRegistry, parameterNamesOf, registryOf, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type JsonRpcGatewayOptions, type ModuleEntry, type RpcFaceEntry, type ViteHmrBridge } from './dist/dev/index.js'
 
 /** fiber/events 增强面：ctx.effect 与 ctx.on 应存在于 Context 接口。 */
 function face(ctx: Context) {
@@ -62,7 +62,15 @@ function devKit() {
   loadEnv('/tmp/.env')
   const handle: Promise<DevAppHandle> = runDevApp(config)
   void handle
-  return { table }
+  // RPC 网关内核（v3）：面表/认证 λ/参数名解析类型可导
+  const rpcOptions: JsonRpcGatewayOptions = {
+    faces: () => new Map<string, RpcFaceEntry>([['pkg-a', { service: {} as object, markers: [{ method: 'run' }] }]]),
+    auth: { login: async (account: string) => ({ token: account, account }), resolve: async (token: string) => ({ account: token }), cookie: 'token' },
+  }
+  const rpc = createJsonRpcGateway(rpcOptions)
+  void rpc
+  const names: string[] = parameterNamesOf({ run: () => 0 } as object, 'run', 'pkg-a/run')
+  return { table, names }
 }
 
 export const _checks = { face, timer, schema, devKit }

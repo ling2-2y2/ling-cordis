@@ -140,7 +140,7 @@ variables — switches and ports arrive as plain config values.
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest (69 cases)
+pnpm test        # vitest (74 cases)
 pnpm build       # tsdown (bundled JS) + tsc (per-module d.ts tree)
 pnpm check:dts   # compile the external-consumer type smoke against dist/
 pnpm smoke       # boot examples/hello end-to-end

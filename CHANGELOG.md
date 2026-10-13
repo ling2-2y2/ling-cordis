@@ -2,6 +2,15 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0] - 2026-10-13
+
+`/dev` 出口再下一城：JSON-RPC 网关内核——`POST /api/<ns>/<method>` 面分派的通用机制进框架，业务树网关只剩自家接线。
+
+### 新增
+
+- `src/dev/rpc.ts`——`createJsonRpcGateway(options)`：会话门（resolveSession/auth.resolve 双路线）→ 命名空间与方法查表（faces 表 + adopt 惰性收编钩子）→ 参数名绑定（`parameterNamesOf` 随批上收为公共件）→ `signal` 参数自动注入（应答 close 即 abort）→ 双形态应答（裸 `{ok,value}` / client-request→server-response 信封）→ 错误折叠（code+message）；可选认证三端点（login/me/logout，凭据语义 λ 注入，cookie 名可配）。
+- 测试 +5（req/res 最小仿真件直调 handle——内核与 HTTP 传输解耦；夹具时序坑在册：emit 须宏任务对齐真实 I/O），总数 74。
+
 ## [1.2.1] - 2026-10-13
 
 ### 修复
@@ -49,6 +58,7 @@
 - 修复 4 处存量类型层错误（fiber.ts/utils.ts，纯类型断言，零运行时变更）。
 - 模块增强改指向定义文件（`declare module '../core/context.ts'`，与 cordis 核心内部写法一致）。
 
+[1.3.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.1.0
