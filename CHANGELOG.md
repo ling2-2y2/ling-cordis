@@ -2,6 +2,17 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [2.0.0] - 2026-10-13
+
+### 破坏性变更（迁移指南随条）
+
+- **RPC 网关空壳化**（用户裁定「authRoutesHook 仍属业务；基础架构可以是空壳」）：`createJsonRpcGateway`/`RpcAuthOptions`/`RpcHook` 及内置 auth 三端点/会话门**移除**——策略件归消费方。替代：`createRpcServer({ layers })` 空壳（koa 式洋葱组合 + 请求上下文 + 兜底 500，零路由/零协议/零自动挂载）+ 机械件 `jsonResponder`（最外层应答汇：内层置 value/failure/status 或自带应答；内层抛错折叠）与 `faceInvoker`（最内层 `POST /api/<ns>/<method>` 查面+按名绑参+signal 注入）；机械件出口 `readRequestBody`/`rpcSendJson` 供业务层自持。**层序即语义**：审计件排 invoker 外=发送前改写最后一站；嵌套天然支持（ALS 型上下文传播=中间件包 next()——v1.4 的 ALS 局限消亡）。层对象挂 `onInit`/`onReady`/`onDestroy` 经 `createRpcFace`/`runDevApp` 挂件槽派发。
+- **迁移**：v1.3/1.4 的 `createJsonRpcGateway({ faces, adopt, auth, resolveSession, onSession, hooks })` → `createRpcServer({ layers: [jsonResponder(), 你的 authRoutes 层（原内置三端点语义，自持 cookie/凭据）, 你的会话门层（resolve+onSession 语义）, faceInvoker({ faces, adopt })] })`。auth 三端点与会话门的参考实现见 examples/dev-app（内存版）与消费方 ling-dsh-common dev-gateway（satoken 版）。
+
+### 新增
+
+- 测试重写为空壳范式 8 例（洋葱回程/认领止链/兜底 500/responder 应答形态与错误折叠/invoker 分派绑参/层生命周期/组合全景——业务 auth+门+审计件位置语义样板/parameterNamesOf 钉）。
+
 ## [1.4.0] - 2026-10-13
 
 ### 新增
@@ -79,6 +90,7 @@
 - 修复 4 处存量类型层错误（fiber.ts/utils.ts，纯类型断言，零运行时变更）。
 - 模块增强改指向定义文件（`declare module '../core/context.ts'`，与 cordis 核心内部写法一致）。
 
+[2.0.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v2.0.0
 [1.4.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.4.0
 [1.3.1]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.3.0

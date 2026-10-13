@@ -9,7 +9,46 @@
  * @module @ling2/ling-cordis/examples/dev-app/ling.config
  */
 import { fileURLToPath } from 'node:url'
-import { createRpcFace, defineApp } from '../../src/dev/index.ts'
+import { createRpcFace, defineApp, faceInvoker, jsonResponder, readRequestBody, rpcSendJson } from '../../src/dev/index.ts'
+
+/** 演示自持业务件：内存凭据 auth 三端点（空壳化的意义——凭据语义属应用，
+ * 真实项目=树 ling-dsh-common dev-gateway 的 satoken 版同位层）。 */
+function demoAuthRoutes() {
+  const cookie = 't-demo'
+  const tokens = new Map([['t-demo', { account: 'demo' }]])
+  const readToken = (req) => req.headers.cookie?.match(new RegExp(`(?:^|;\\s*)${cookie}=([^;]*)`))?.[1] ?? req.headers.satoken ?? ''
+  return async (ctx, next) => {
+    const { method, pathname, req, res } = ctx
+    if (method === 'POST' && pathname === '/api/auth/login') {
+      const body = JSON.parse((await readRequestBody(req)).toString('utf8') || '{}')
+      const ok = body.account === 'demo' && body.password === '123456'
+      res.setHeader('set-cookie', `${cookie}=${ok ? 't-demo' : ''}; Path=/; HttpOnly; SameSite=Strict`)
+      rpcSendJson(res, ok ? 200 : 401, ok ? { ok: true, token: 't-demo', account: 'demo' } : { ok: false, message: '登录失败' })
+      return true
+    }
+    if (method === 'POST' && pathname === '/api/auth/me') {
+      const session = tokens.get(readToken(req))
+      rpcSendJson(res, session === undefined ? 401 : 200, session === undefined ? { ok: false } : { ok: true, account: session.account })
+      return true
+    }
+    if (method === 'POST' && pathname === '/api/auth/logout') {
+      res.setHeader('set-cookie', `${cookie}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`)
+      rpcSendJson(res, 200, { ok: true })
+      return true
+    }
+    // 会话门（/api/ 族）：缺席置 401 failure 交 responder 发
+    if (method === 'POST' && /^\/api\/[a-zA-Z][\w.-]*\/[\w.-]+$/.test(pathname)) {
+      const session = tokens.get(readToken(req))
+      if (session === undefined) {
+        ctx.status = 401
+        ctx.failure = { code: 'gateway/unauthorized', message: `未登录：会话令牌缺席或已失效 (path=${pathname})` }
+        return true
+      }
+      ctx.session = session
+    }
+    return next()
+  }
+}
 
 /** 动态 import 说明符（file:// URL——Windows 裸盘符路径非合法 ESM 说明符）。 */
 const spec = (path) => new URL(path, import.meta.url).href
@@ -38,26 +77,21 @@ export default defineApp({
     { id: 'demo2', phase: 'tail', note: '跨模块·消费方（static inject 依赖 demo1）', spec: spec('./plugins/demo2.ts'), use: 'default' },
   ],
 
-  // JSON-RPC 网关：内存凭据 demo/123456（真实项目换成自家鉴权 λ——satoken 等）。
-  // createRpcFace 对象形态=钩子生命周期挂件（ready/dispose 派发 onReady/onDestroy，
-  // healthz 附加位进健康检查）；hooks=扩展点示范（访问日志——before/after 各一行）。
-  // 三个面同表登记：demo/demo1/demo2——前端跨模块=换命名空间即达；
-  // 后端跨模块在 demo2.report 内部经 ctx.get('demo1') 穿透（见 plugins/demo2.ts）。
+  // RPC 网关（v2 空壳化）：框架只出机械件（jsonResponder 应答汇/faceInvoker 分派），
+  // 业务层（auth 三端点+会话门）是演示自持中间件——层序即语义：
+  // responder(最外·应答汇) → 业务 auth/门 → 审计件(invoker 外·发送前改写) → invoker。
   http: (ctx) => [createRpcFace({
-    faces: () => new Map([
-      ['demo', { service: ctx.get('greet'), markers: [{ method: 'hello' }, { method: 'add' }] }],
-      ['demo1', { service: ctx.get('demo1'), markers: [{ method: 'double' }, { method: 'label' }] }],
-      ['demo2', { service: ctx.get('demo2'), markers: [{ method: 'report' }] }],
-    ]),
-    auth: {
-      login: async (account, password) => (account === 'demo' && password === '123456' ? { token: 't-demo', account } : { token: '' }),
-      resolve: async (token) => (token === 't-demo' ? { account: 'demo' } : undefined),
-    },
-    hooks: [{
-      name: '访问日志',
-      beforeRequest: (c) => { console.log(`[demo] → ${c.method} ${c.pathname}`) },
-      afterRequest: (c) => { if (c.namespace !== undefined) console.log(`[demo] ← ${c.namespace}/${c.methodName} ok`) },
-    }],
+    layers: [
+      jsonResponder(),
+      demoAuthRoutes(),
+      async (c, next) => { console.log(`[demo] → ${c.method} ${c.pathname}`); const r = await next(); if (c.namespace !== undefined) console.log(`[demo] ← ${c.namespace}/${c.methodName}`); return r },
+      async (c, next) => { const r = await next(); if (c.namespace === 'demo2') c.value = { ...c.value, audited: true }; return r },
+      faceInvoker({ faces: () => new Map([
+        ['demo', { service: ctx.get('greet'), markers: [{ method: 'hello' }, { method: 'add' }] }],
+        ['demo1', { service: ctx.get('demo1'), markers: [{ method: 'double' }, { method: 'label' }] }],
+        ['demo2', { service: ctx.get('demo2'), markers: [{ method: 'report' }] }],
+      ]) }),
+    ],
     healthz: () => ({ faces: 3 }),
   })],
 

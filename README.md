@@ -27,7 +27,7 @@ flowchart TD
   end
   subgraph L3["/dev toolkit — import from '@ling2/ling-cordis/dev'"]
     KERNEL["runDevApp carrier kernel<br/>env → Context → phased mounts → http faces → bounded shutdown"]
-    GW["createJsonRpcGateway<br/>session gate · face dispatch · arg binding · auth trio"]
+    GW["createRpcServer — empty shell<br/>+ jsonResponder / faceInvoker<br/>policies live in your layers"]
     HMR["createViteHmrBridge<br/>(vite is your peer dep, optional)"]
     UTILS["ModuleRegistry · build orchestration · link helpers"]
   end
@@ -164,15 +164,19 @@ self-tests the whole chain (login → RPC arg binding → session gate → healt
 static SPA) and exits — that one command is the fastest way to judge the
 experience.
 
-**Gateway policies are lifecycle hooks, not hardcode.** The JSON-RPC kernel
-splits mechanics (pipeline orchestration, request context) from wire policies
-(auth trio, session gate, envelope shaping) — the latter are built-in
-*removable* hooks. Extend with `hooks: [{ beforeRequest, afterRequest, onError }]`
-(axios-interceptor / vite-plugin style; user hooks run first so public routes
-can bypass the session gate), and `createRpcFace` wires the full lifecycle
-(`onInit` / `onReady` / `onDestroy`) into `runDevApp`'s face slots. ALS-style
-wrapping concerns (request-scoped context propagation) keep nesting semantics —
-compose them around the handle.
+**The gateway is an empty shell; every policy is your layer.** `createRpcServer`
+is koa-style onion composition only — no routes, no protocol shapes, nothing
+auto-mounted. Compose explicit layers: the mechanical pieces shipped with the
+package (`jsonResponder` — outermost response sink; `faceInvoker` — innermost
+`POST /api/<ns>/<method>` dispatch with by-name arg binding), plus your
+business layers in between (auth trio, session gate, audit, logging). Layer
+order *is* the semantics: an audit layer outside the invoker rewrites the
+value right before it is sent; nesting comes free (ALS-style request-context
+propagation is just a middleware wrapping `next()`). Layer objects may carry
+`onInit` / `onReady` / `onDestroy`, dispatched through `createRpcFace` and
+`runDevApp`'s face slots. In `examples/dev-app` the whole auth trio + session
+gate is ~40 lines of demo-owned middleware — that's the intended shape for
+your policies.
 
 ## Modules
 

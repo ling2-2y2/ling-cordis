@@ -6,7 +6,7 @@
  * 由 CI 在 build 之后独立编译（不在 tsconfig.json include 面内，防止源码态混入）。
  */
 import { Context, Fiber, schemastery as z } from './dist/index.js'
-import { buildRegisteredModules, createJsonRpcGateway, createRpcFace, createViteHmrBridge, defineApp, loadEnv, ModuleRegistry, parameterNamesOf, registryOf, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type JsonRpcGatewayOptions, type ModuleEntry, type RpcContext, type RpcFaceEntry, type RpcHook, type ViteHmrBridge } from './dist/dev/index.js'
+import { buildRegisteredModules, createRpcFace, createRpcServer, createViteHmrBridge, defineApp, faceInvoker, jsonResponder, loadEnv, ModuleRegistry, parameterNamesOf, readRequestBody, registryOf, rpcSendJson, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type ModuleEntry, type RpcContext, type RpcFaceEntry, type RpcLayer, type RpcMiddleware, type RpcServerOptions, type ViteHmrBridge } from './dist/dev/index.js'
 
 /** fiber/events 增强面：ctx.effect 与 ctx.on 应存在于 Context 接口。 */
 function face(ctx: Context) {
@@ -62,24 +62,27 @@ function devKit() {
   loadEnv('/tmp/.env')
   const handle: Promise<DevAppHandle> = runDevApp(config)
   void handle
-  // RPC 网关内核（v3）：面表/认证 λ/参数名解析类型可导
-  const rpcOptions: JsonRpcGatewayOptions = {
-    faces: () => new Map<string, RpcFaceEntry>([['pkg-a', { service: {} as object, markers: [{ method: 'run' }] }]]),
-    auth: { login: async (account: string) => ({ token: account, account }), resolve: async (token: string) => ({ account: token }), cookie: 'token' },
+  // RPC 网关空壳（v2.0.0）：层序类型面 + 机械件 + 业务层中间件 + 挂件生命周期
+  const faces = () => new Map<string, RpcFaceEntry>([['pkg-a', { service: {} as object, markers: [{ method: 'run' }] }]])
+  const audit: RpcMiddleware = async (c: RpcContext, next) => {
+    const handled = await next()
+    if (c.namespace === 'pkg-a') c.value = 1
+    return handled
   }
-  const rpc = createJsonRpcGateway(rpcOptions)
-  void rpc
-  // 生命周期钩子（v4）：RpcHook/RpcContext 类型面 + createRpcFace 对象挂件
-  const accessLog: RpcHook = {
-    name: '冒烟钩子',
-    beforeRequest: (c: RpcContext) => { void c.pathname },
-    afterRequest: (c: RpcContext) => { if (c.namespace === 'pkg-a') c.value = 1 },
-  }
-  const face = createRpcFace({ ...rpcOptions, hooks: [accessLog], healthz: () => ({ faces: 1 }) })
-  void face.ready
-  void face.dispose
-  void face.healthz
+  const layers: RpcLayer[] = [jsonResponder(), audit, faceInvoker({ faces })]
+  const serverOptions: RpcServerOptions = { layers }
+  const rpcHandle = createRpcServer(serverOptions)
+  void rpcHandle
+  const layeredFace = createRpcFace({
+    layers: [...layers, { name: '冒烟层', mw: audit, onReady: () => {}, onDestroy: () => {} }],
+    healthz: () => ({ faces: 1 }),
+  })
+  void layeredFace.ready
+  void layeredFace.dispose
+  void layeredFace.healthz
   const names: string[] = parameterNamesOf({ run: () => 0 } as object, 'run', 'pkg-a/run')
+  void (readRequestBody as (req: never) => Promise<Buffer>)
+  void (rpcSendJson as (res: never, status: number, body: unknown) => void)
   return { table, names }
 }
 
