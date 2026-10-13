@@ -5,6 +5,7 @@
 export const mounted = []
 
 export function apply(ctx, config) {
-  mounted.push(config?.mark ?? 'anonymous')
-  ctx.provide(`fake-${String(config?.mark ?? 'anon')}`, true)
+  // config 省略记录 'no-config'（区分 ctx.plugin(P) 与 ctx.plugin(P, {}) 的内核语义钉）
+  mounted.push(config === undefined ? 'no-config' : String(config.mark ?? 'anonymous'))
+  ctx.provide(`fake-${config === undefined ? 'bare' : String(config.mark ?? 'anon')}`, true)
 }

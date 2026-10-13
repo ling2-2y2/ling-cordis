@@ -2,6 +2,12 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.2.1] - 2026-10-13
+
+### 修复
+
+- runDevApp 相位条目 `config` 省略时不再传 `{}`——`ctx.plugin(P)` 与 `ctx.plugin(P, {})` 不等价（`config ?? 缺省档` 形态的插件会走岔），语义保真优先于形状整齐（测试钉：no-config 条目收到的 config 为 undefined）。
+
 ## [1.2.0] - 2026-10-13
 
 `/dev` 出口补齐"装配故事"下半场：声明式配置直接跑成 dev 服务器（vite.config.ts 式薄配置体验）。
@@ -43,6 +49,7 @@
 - 修复 4 处存量类型层错误（fiber.ts/utils.ts，纯类型断言，零运行时变更）。
 - 模块增强改指向定义文件（`declare module '../core/context.ts'`，与 cordis 核心内部写法一致）。
 
+[1.2.1]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.0.0

@@ -188,7 +188,9 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
       if (entry.spec !== undefined) {
         const mod = await import(entry.spec)
         const plugin = entry.use === 'default' ? mod.default : mod
-        await ctx.plugin(plugin as never, (entry.config ?? {}) as never)
+        // config 省略即传 undefined（ctx.plugin(P) ≠ ctx.plugin(P, {})——`config ?? 缺省档`
+        // 形态的插件族会走岔；签名必填故显式 undefined 保真语义）
+        await ctx.plugin(plugin as never, (entry.config === undefined ? undefined : entry.config) as never)
       }
       await entry.after?.(ctx)
       console.log(`[${label}] 模块挂载 ${phase}: ${entry.id}${entry.note === undefined ? '' : `（${entry.note}）`}`)

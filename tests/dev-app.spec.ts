@@ -36,7 +36,7 @@ function freePort(): Promise<number> {
 }
 
 describe('runDevApp', () => {
-  it('三相按序挂载：spec 双形态（namespace/default）+after 钩子', async () => {
+  it('三相按序挂载：spec 双形态（namespace/default）+config 省略不传+after 钩子', async () => {
     const { mounted } = await import(fixtureNs)
     const { mountedDefault } = await import(fixtureDefault)
     mounted.length = 0
@@ -50,11 +50,12 @@ describe('runDevApp', () => {
       modules: [
         { id: 'p-ns', phase: 'base', spec: fixtureNs, config: { mark: 'ns1' } },
         { id: 'p-default', phase: 'base', spec: fixtureDefault, use: 'default', config: { mark: 'd1' } },
+        { id: 'p-bare', phase: 'base', spec: fixtureNs },
         { id: 'p-after-only', phase: 'tail', after: () => { order.push('after-only') } },
       ],
     }))
     apps.push(app)
-    expect(mounted).toEqual(['ns1'])
+    expect(mounted).toEqual(['ns1', 'no-config'])
     expect(mountedDefault).toEqual(['d1'])
     expect(order).toEqual(['after-only'])
     await app.dispose()
