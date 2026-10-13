@@ -1,0 +1,338 @@
+/**
+ * 载体内核 runDevApp——把一份声明式配置（vite.config.ts 同款薄形态）跑成
+ * dev 服务器：env 装配 → Context+LoggerConsole+Timer → setup 钩子 → 三相模块
+ * 循环（spec 动态 import → ctx.plugin → after 钩子）→ HTTP 面（配置挂件先行，
+ * 框架内建 healthz/boot-status/静态 SPA//packages 表/HMR 组合殿后）→ 端口卫兵
+ * → onReady → 有界停机。
+ *
+ * env 纪律：本内核不读任何环境变量——开关/端口/路径全部由配置传值；配置文件
+ * 求值序契约=薄壳先 loadEnv('.env') 再动态 import 配置（配置体求值时 env 已在场，
+ * 规避工厂函数自举环）。业务面（认证/RPC/面收编）经 http 挂件注入，框架零业务。
+ * @module @ling2/ling-cordis/dev/app
+ */
+import { existsSync, readFileSync } from 'node:fs'
+import { extname, join } from 'node:path'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { Duplex } from 'node:stream'
+import { Context } from '../core/index.ts'
+import LoggerConsole from '../plugins/logger-console/index.ts'
+import Timer from '../plugins/timer.ts'
+import { ModuleRegistry, type ModuleEntry } from './registry.ts'
+import { createViteHmrBridge, type ViteHmrBridge } from './hmr.ts'
+
+/** .env 装配：解析 key=value 行（parseEnv 语义）注入 process.env（不覆盖显式注入）。 */
+export function loadEnv(file: string, defaults: Record<string, string> = {}): void {
+  if (existsSync(file)) {
+    for (const line of readFileSync(file, 'utf8').split(/\r?\n/u)) {
+      const match = /^\s*([\w.-]+)\s*=\s*(.*)\s*$/u.exec(line)
+      if (match === null || match[1]!.startsWith('#')) continue
+      const value = match[2]!.replace(/^["']|["']$/gu, '')
+      if (process.env[match[1]!] === undefined) process.env[match[1]!] = value
+    }
+  }
+  for (const [key, value] of Object.entries(defaults)) {
+    if (process.env[key] === undefined) process.env[key] = value
+  }
+}
+
+/** 相位条目：spec+config 声明式挂载（动态 import 由内核代劳），复杂逻辑走 after。 */
+export interface DevAppEntry extends Omit<ModuleEntry, 'mount'> {
+  /** 动态 import 说明符（缺席=纯 after 条目——挂载钩子/补供等用途）。 */
+  spec?: string
+  /** import 形态：'default' 取 mod.default；缺省 'namespace' 传整个命名空间
+   * （树内两形态并存：class 插件走 default，`export function apply` 族走命名空间）。 */
+  use?: 'default' | 'namespace'
+  /** ctx.plugin 第二参（spec 在场才有意义）。 */
+  config?: unknown
+  /** 挂载后钩子（补供/栅栏/行序修正等）。 */
+  after?: (ctx: Context) => void | Promise<void>
+}
+
+/** HTTP 面处理器（认领=true 止链）。 */
+export type DevHttpHandler = (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>
+
+/** HTTP 面挂件对象形态（带升级/停机/健康位的网关走此形态）。 */
+export interface DevHttpFaceObject {
+  /** HTTP 处理器（认领=true 止链）。 */
+  handle?: DevHttpHandler
+  /** ws 升级处理器（认领=true 止链；先于 HMR 透传）。 */
+  upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean
+  /** 停机清理器（HMR/fiber 清理之前调用）。 */
+  dispose?: () => void | Promise<void>
+  /** healthz 附加位（并进应答体）。 */
+  healthz?: () => Record<string, unknown>
+}
+
+/** HTTP 面挂件：纯处理器或对象形态。 */
+export type DevHttpFace = DevHttpHandler | DevHttpFaceObject
+
+/** 载体配置（声明式；env 取值在配置体内算——薄壳先 loadEnv 再 import 本配置）。 */
+export interface DevAppConfig {
+  /** 树根绝对路径（/packages 表与 carrier 的基準；配置体内 import.meta.dirname 取）。 */
+  rootDir: string
+  /** 日志前缀，缺省 'dev'。 */
+  label?: string
+  /** 监听端口，缺省 3000。 */
+  port?: number
+  /** 监听地址，缺省 127.0.0.1（容器形态传 0.0.0.0）。 */
+  host?: string
+  /** env 缺省注入（loadEnv 薄壳已先行；此处为运行期消费者的兜底）。 */
+  envDefaults?: Record<string, string>
+  /** API 前缀剥离：`<p>/api/*` → `/api/*`（仅 API，静态路径不动——SPA 深链语义）。 */
+  stripApiPrefixes?: string[]
+  /** 整路径重定向（如 '/' → '/app/'）。 */
+  redirects?: Record<string, string>
+  /** vite HMR 桥（enabled 缺省 true；未配置=无 HMR；bin=自定义 vite 入口）。 */
+  hmr?: { cwd: string; enabled?: boolean; port?: number; host?: string; readyPath?: string; bin?: string }
+  /** 静态 SPA 面（urlPrefix 缺省 '/app'；extras=前缀下额外文件映射）。 */
+  staticApp?: {
+    urlPrefix?: string
+    root: string
+    extras?: Record<string, string>
+    /** 资产扩展名白名单（命中才直出文件，否则 SPA index 兜底）。 */
+    assetExt?: RegExp
+  }
+  /** /packages/ 静态表额外条目（模块 client 条目自动并入）。 */
+  packagesExtras?: Record<string, string>
+  /** 有序相名表（如 ['base', 'core', 'engine', 'tail']；相间无夹层——夹层内容条目化）。 */
+  phases: readonly string[]
+  /** 相位条目（登记序即挂载序）。 */
+  modules: DevAppEntry[]
+  /** 装配首站钩子（LoggerConsole/Timer 之后、相循环之前）；返回函数=停机清理器。 */
+  setup?: (ctx: Context) => void | Promise<void> | (() => void)
+  /** HTTP 面挂件工厂（相循环之后调用；返回纯处理器或对象形态的数组）。 */
+  http?: (ctx: Context) => DevHttpFace[]
+  /** 编译载体特名（build 薄壳消费）。 */
+  carrier?: { id: string; cwd: string; script: string }
+  /** 模块构建脚本名（build 薄壳消费），缺省 'build:client'。 */
+  buildScript?: string
+  /** 就绪钩子（listen+自检之后；种子跑批/自定义就绪日志）。 */
+  onReady?: (app: { port: number; host: string; label: string }) => void | Promise<void>
+}
+
+/** 配置类型锚（vite defineConfig 同款直通助手）。 */
+export function defineApp<T extends DevAppConfig>(config: T): T {
+  return config
+}
+
+/** 运行句柄：编程式停机（信号接管之外，嵌入方/测试的 dispose 通道）。 */
+export interface DevAppHandle {
+  dispose(): Promise<void>
+}
+
+/** 配置→注册表（/packages 表与 build 薄壳同源消费）。 */
+export function registryOf(config: Pick<DevAppConfig, 'phases' | 'modules'>): ModuleRegistry {
+  const registry = new ModuleRegistry(config.phases)
+  for (const entry of config.modules) registry.add(entry as ModuleEntry)
+  return registry
+}
+
+const DEFAULT_ASSET_EXT = /^[\w.-]+\.(js|mjs|css|map|png|jpg|jpeg|svg|woff2?|ttf|ico|json|wasm)$/u
+
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(JSON.stringify(body))
+}
+
+function serveStaticFile(file: string, res: ServerResponse, notFound: () => void): void {
+  let body: Buffer
+  try {
+    body = readFileSync(file)
+  } catch {
+    notFound()
+    return
+  }
+  const ext = extname(file)
+  const contentType = ext === '.js' || ext === '.mjs' ? 'text/javascript; charset=utf-8'
+    : ext === '.css' ? 'text/css'
+    : ext === '.html' ? 'text/html; charset=utf-8'
+    : ext === '.json' || ext === '.map' ? 'application/json; charset=utf-8'
+    : ext === '.svg' ? 'image/svg+xml'
+    : ext === '.png' ? 'image/png'
+    : ext === '.woff2' ? 'font/woff2'
+    : 'application/octet-stream'
+  res.writeHead(200, { 'content-type': contentType })
+  res.end(body)
+}
+
+/** 有界停机：dispose 挂起 5s 强杀兜底；停机中再按立即强杀。 */
+function createBoundedShutdown(label: string, dispose: () => void | Promise<void>): (code: number) => void {
+  let shuttingDown = false
+  return function interrupt(code) {
+    if (shuttingDown) { console.error(`[${label}] 停机中再按——立即强杀`); process.exit(137) }
+    shuttingDown = true
+    console.log(`[${label}] 停机中（${code}）——dispose 挂起 5s 强杀兜底`)
+    const killer = setTimeout(() => { console.error(`[${label}] dispose 超时——强杀`); process.exit(code) }, 5000)
+    killer.unref?.()
+    void Promise.resolve(dispose()).then(() => { clearTimeout(killer); process.exit(code) }, () => { clearTimeout(killer); process.exit(code) })
+  }
+}
+
+/** 跑载体：配置 → dev 服务器（常驻；进程信号接管停机；返回编程式 dispose 句柄）。 */
+export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
+  const label = config.label ?? 'dev'
+  const port = config.port ?? 3000
+  const host = config.host ?? '127.0.0.1'
+  const bootStartedAt = Date.now()
+  loadEnv('', config.envDefaults ?? {})
+
+  const ctx = new Context()
+  await ctx.plugin(LoggerConsole)
+  await ctx.plugin(Timer)
+  const setupDisposer = await config.setup?.(ctx)
+
+  // 三相挂载循环（spec→plugin→after；数组登记序即挂载序）
+  const registry = registryOf(config)
+  for (const phase of config.phases) {
+    for (const entry of registry.ofPhase(phase) as DevAppEntry[]) {
+      if (entry.spec !== undefined) {
+        const mod = await import(entry.spec)
+        const plugin = entry.use === 'default' ? mod.default : mod
+        await ctx.plugin(plugin as never, (entry.config ?? {}) as never)
+      }
+      await entry.after?.(ctx)
+      console.log(`[${label}] 模块挂载 ${phase}: ${entry.id}${entry.note === undefined ? '' : `（${entry.note}）`}`)
+    }
+  }
+
+  // HTTP 面挂件收集（纯处理器或对象形态四槽分拣）
+  const faces = config.http === undefined ? [] : await config.http(ctx)
+  const handlers: DevHttpHandler[] = []
+  const upgraders: NonNullable<DevHttpFaceObject['upgrade']>[] = []
+  const faceDisposers: NonNullable<DevHttpFaceObject['dispose']>[] = []
+  const healthzBits: (() => Record<string, unknown>)[] = []
+  for (const face of faces) {
+    if (typeof face === 'function') { handlers.push(face); continue }
+    if (face.handle !== undefined) handlers.push(face.handle)
+    if (face.upgrade !== undefined) upgraders.push(face.upgrade)
+    if (face.dispose !== undefined) faceDisposers.push(face.dispose)
+    if (face.healthz !== undefined) healthzBits.push(face.healthz)
+  }
+
+  // HMR 桥（enabled 缺省 true；机制见 ./hmr.ts——认领顺序=挂件升级先、透传后）
+  let hmr: ViteHmrBridge | undefined
+  if (config.hmr !== undefined && config.hmr.enabled !== false) {
+    hmr = createViteHmrBridge({
+      cwd: config.hmr.cwd,
+      port: config.hmr.port,
+      host: config.hmr.host,
+      readyPath: config.hmr.readyPath,
+      viteBin: config.hmr.bin,
+      logger: (level, message) => console[level](`[${label}] ${message}`),
+    })
+    if (hmr.port !== 0) {
+      await hmr.ready
+      console.log(`[${label}] vite HMR 就绪（:${hmr.port}，反代+ws 透传）`)
+    }
+  }
+
+  const staticConf = config.staticApp
+  const urlPrefix = staticConf?.urlPrefix ?? '/app'
+  const packagesTable: Record<string, string> = { ...registry.clientTable(config.rootDir), ...config.packagesExtras }
+
+  async function handleInner(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // API 前缀剥离（仅 API 生效；静态路径原样——SPA 深链）
+    if (req.url !== undefined) {
+      for (const prefix of config.stripApiPrefixes ?? []) {
+        if (req.url.startsWith(`${prefix}/api/`)) { req.url = req.url.slice(prefix.length); break }
+      }
+    }
+    for (const handler of handlers) {
+      if (await handler(req, res)) return
+    }
+    const url = new URL(req.url ?? '/', 'http://localhost')
+    const pathname = url.pathname
+    const notFound = () => sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `not found: ${req.method} ${pathname}` } })
+
+    const redirect = config.redirects?.[pathname]
+    if (req.method === 'GET' && redirect !== undefined) {
+      res.writeHead(302, { location: redirect })
+      res.end()
+      return
+    }
+    if (req.method === 'GET' && pathname === '/healthz') {
+      const extra: Record<string, unknown> = {}
+      for (const bit of healthzBits) Object.assign(extra, bit())
+      return sendJson(res, 200, { ok: true, runtime: label, ...extra })
+    }
+    if (req.method === 'GET' && pathname === '/boot-status') {
+      return sendJson(res, 200, { phase: 'ready', elapsedMs: Math.max(0, Date.now() - bootStartedAt) })
+    }
+
+    // 静态 SPA 面（HMR 激活=反代；回落=dist 静态+SPA 兜底）
+    if (req.method === 'GET' && (pathname === urlPrefix || pathname === `${urlPrefix}/`)) {
+      if (hmr?.proxyHttp(req, res, `${urlPrefix}/`) === true) return
+      if (staticConf !== undefined) return serveStaticFile(join(staticConf.root, 'index.html'), res, notFound)
+      return notFound()
+    }
+    if (req.method === 'GET' && pathname.startsWith(`${urlPrefix}/`)) {
+      if (hmr?.proxyHttp(req, res, req.url ?? pathname) === true) return
+      if (staticConf !== undefined) {
+        const rel = pathname.slice(`${urlPrefix}/`.length)
+        const extra = staticConf.extras?.[rel]
+        if (extra !== undefined) return serveStaticFile(extra, res, notFound)
+        const file = join(staticConf.root, rel)
+        if (!file.startsWith(staticConf.root)) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: '路径越界' } })
+        const assetExt = staticConf.assetExt ?? DEFAULT_ASSET_EXT
+        if (assetExt.test(rel.split('/').pop() ?? '')) return serveStaticFile(file, res, notFound)
+        return serveStaticFile(join(staticConf.root, 'index.html'), res, notFound)
+      }
+      return notFound()
+    }
+    if (req.method === 'GET' && pathname.startsWith('/packages/')) {
+      const file = packagesTable[decodeURIComponent(pathname.slice('/packages/'.length))]
+      if (file === undefined) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `包面文件未登记: ${pathname}` } })
+      return serveStaticFile(file, res, notFound)
+    }
+    return notFound()
+  }
+
+  const server = createServer((req, res) => {
+    void handleInner(req, res).catch((error) => {
+      if (!res.headersSent) sendJson(res, 500, { ok: false, error: { code: 'gateway/internal', message: error instanceof Error ? error.message : String(error) } })
+      else res.end()
+    })
+  })
+  server.on('upgrade', (req, socket, head) => {
+    for (const upgrader of upgraders) {
+      if (upgrader(req, socket, head)) return
+    }
+    if (hmr?.proxyUpgrade(req, socket, head) === true) return
+    socket.destroy()
+  })
+
+  // 端口卫兵：healthz 已有应答=旧实例在跑，fail loud
+  if (await fetch(`http://${host}:${port}/healthz`).then(() => true, () => false)) {
+    throw new Error(`[${label}] 端口 ${port} 已有 healthz 应答（旧实例在跑）——先停旧实例再起`)
+  }
+  await new Promise<void>((resolveListen) => { server.listen(port, host, () => resolveListen()) })
+  const health = await fetch(`http://${host}:${port}/healthz`).then(
+    (r) => r.json(),
+    (error) => { throw new Error(`[${label}] 自检探活失败（:${port}）: ${String(error)}`) },
+  )
+  if ((health as { ok?: boolean })?.ok !== true) throw new Error(`[${label}] healthz 应答异常: ${JSON.stringify(health)}`)
+  console.log(`[${label}] ready http://${host}:${port}/`)
+  await config.onReady?.({ port, host, label })
+  console.log(`[${label}] 进程常驻（Ctrl+C 收敛——有界停机）`)
+
+  async function disposeAll(): Promise<void> {
+    for (const disposer of faceDisposers) await disposer()
+    if (setupDisposer !== undefined && typeof setupDisposer === 'function') setupDisposer()
+    hmr?.dispose()
+    await new Promise<void>((resolveClose) => { server.close(() => resolveClose()) })
+    await ctx.fiber.dispose()
+  }
+  const shutdown = createBoundedShutdown(label, disposeAll)
+  const signals: [NodeJS.Signals, (code: number) => void][] = [
+    ['SIGINT', () => shutdown(130)],
+    ['SIGTERM', () => shutdown(0)],
+    ['SIGBREAK', () => shutdown(130)],
+  ]
+  for (const [signal, handler] of signals) process.on(signal, handler)
+  return {
+    async dispose() {
+      for (const [signal, handler] of signals) process.off(signal, handler)
+      await disposeAll()
+    },
+  }
+}

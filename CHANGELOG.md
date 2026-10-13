@@ -2,6 +2,16 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2026-10-13
+
+`/dev` 出口补齐"装配故事"下半场：声明式配置直接跑成 dev 服务器（vite.config.ts 式薄配置体验）。
+
+### 新增
+
+- `src/dev/app.ts`——`runDevApp(config)` 载体内核：env 装配助手 `loadEnv` → Context+LoggerConsole+Timer → `setup` 钩子 → 三相模块循环（`spec` 动态 import → `ctx.plugin` → `after` 钩子；`use:'default'|'namespace'` 兼容两种插件出口形态）→ HTTP 面（配置挂件先行，内建 healthz 附加位/boot-status/静态 SPA/`/packages` 表/重定向/API 前缀剥离/HMR 组合殿后）→ 端口卫兵 → `onReady` → 有界停机；返回编程式 `DevAppHandle.dispose()`；`defineApp` 类型锚、`registryOf` 配置→注册表。
+- `src/dev/link.ts`——物理层接线助手族：`ensureJunctions`（幂等 junction 清单；指向判定用 realpath 双侧归一——修正 Windows junction readlink `\\?\` 前缀导致每轮重建的隐性缺陷）、`pruneDangling`（悬空链接清理）、`writeShim`（合成包整体重建：package.json+桥文件族）。
+- 测试 +9（app 6：三相序/HTTP 内建面/dispose 链/HMR 组合/registryOf/loadEnv；link 3），总数 69。
+
 ## [1.1.0] - 2026-10-13
 
 新增 `/dev` 子出口：应用装配与开发工作流工具族（机制自生产树"开发三令"上收——HMR 形态 / 模块注册表单点 / 全量+单模块编译，2026-10-10 用户三令）。
@@ -33,5 +43,6 @@
 - 修复 4 处存量类型层错误（fiber.ts/utils.ts，纯类型断言，零运行时变更）。
 - 模块增强改指向定义文件（`declare module '../core/context.ts'`，与 cordis 核心内部写法一致）。
 
+[1.2.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ling2-2y2/ling-cordis/releases/tag/v1.0.0

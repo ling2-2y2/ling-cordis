@@ -6,7 +6,7 @@
  * 由 CI 在 build 之后独立编译（不在 tsconfig.json include 面内，防止源码态混入）。
  */
 import { Context, Fiber, schemastery as z } from './dist/index.js'
-import { buildRegisteredModules, createViteHmrBridge, ModuleRegistry, type ModuleEntry, type ViteHmrBridge } from './dist/dev/index.js'
+import { buildRegisteredModules, createViteHmrBridge, defineApp, loadEnv, ModuleRegistry, registryOf, runDevApp, type DevAppConfig, type DevAppEntry, type DevAppHandle, type DevHttpFace, type ModuleEntry, type ViteHmrBridge } from './dist/dev/index.js'
 
 /** fiber/events 增强面：ctx.effect 与 ctx.on 应存在于 Context 接口。 */
 function face(ctx: Context) {
@@ -34,7 +34,7 @@ function schema(fiber: Fiber) {
   return { config, state, probe }
 }
 
-/** /dev 工具族出口：注册表（含 TEnv 泛型与 mount 面型）/HMR 桥/编译编排类型可导。 */
+/** /dev 工具族出口：注册表/HMR 桥/编译编排/载体内核/接线助手类型可导。 */
 function devKit() {
   interface MountEnv { pgUrl: string }
   const registry = new ModuleRegistry<MountEnv>(['core', 'tail'])
@@ -51,6 +51,17 @@ function devKit() {
   void bridge.proxyHttp
   void bridge.proxyUpgrade
   buildRegisteredModules({ registry, rootDir: '/tree', targets: ['pkg-a'] })
+  // 载体内核（v2）：声明式配置面型与直通助手
+  const config: DevAppConfig = defineApp({
+    rootDir: '/tree',
+    phases: ['base', 'core', 'engine', 'tail'],
+    modules: [{ id: 'pkg-a', phase: 'core', spec: '@scope/pkg-a', use: 'default', config: { a: 1 } } satisfies DevAppEntry],
+    http: (): DevHttpFace[] => [{ healthz: () => ({ faces: 1 }) }],
+  })
+  void registryOf(config)
+  loadEnv('/tmp/.env')
+  const handle: Promise<DevAppHandle> = runDevApp(config)
+  void handle
   return { table }
 }
 

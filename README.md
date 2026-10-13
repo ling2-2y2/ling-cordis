@@ -90,6 +90,32 @@ Claim order stays yours: the bridge never owns your server — you call
 `proxyHttp` / `proxyUpgrade` and keep other handlers (auth, bridges, static)
 in front. vite itself is your peer dependency; the package adds none.
 
+**Or skip the wiring entirely** — `runDevApp` turns one declarative config into
+the whole dev server (a `vite.config.ts`-style experience):
+
+```ts
+import { defineApp, runDevApp } from '@ling2/ling-cordis/dev'
+
+const config = defineApp({
+  rootDir: import.meta.dirname,
+  port: 3000,
+  hmr: { cwd: 'web-app' },
+  staticApp: { root: 'web-app/dist' },
+  phases: ['base', 'core', 'engine', 'tail'],
+  modules: [
+    { id: 'my-plugin', phase: 'tail', spec: './src/my-plugin.ts',
+      client: { key: 'my-plugin/client.js' }, config: { port: 1 } },
+  ],
+  http: (ctx) => [{ handle: myGateway(ctx), healthz: () => ({ faces: 3 }) }],
+})
+await runDevApp(config) // env → Context → phases loop → http + HMR + static → bounded shutdown
+```
+
+Entries mount via dynamic `import(spec)` + `ctx.plugin` (`use: 'default'` for
+class plugins), complex wiring goes in `after` hooks, and `loadEnv` / registry /
+build / link helpers round out the kit. The kernel reads no environment
+variables — switches and ports arrive as plain config values.
+
 ## Modules
 
 | Path | What it is | Upstream origin |
@@ -114,7 +140,7 @@ in front. vite itself is your peer dependency; the package adds none.
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest (60 cases)
+pnpm test        # vitest (69 cases)
 pnpm build       # tsdown (bundled JS) + tsc (per-module d.ts tree)
 pnpm check:dts   # compile the external-consumer type smoke against dist/
 pnpm smoke       # boot examples/hello end-to-end

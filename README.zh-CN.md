@@ -88,6 +88,31 @@ buildRegisteredModules({ registry, rootDir, carrier: { id: 'web', cwd: 'web-app'
 其他处理器（认证、桥、静态面）仍在你手里排在前面。vite 是使用方的对等件，
 本包零新增依赖。
 
+**或者干脆不接线**——`runDevApp` 把一份声明式配置直接跑成整个 dev 服务器
+（`vite.config.ts` 式薄配置体验）：
+
+```ts
+import { defineApp, runDevApp } from '@ling2/ling-cordis/dev'
+
+const config = defineApp({
+  rootDir: import.meta.dirname,
+  port: 3000,
+  hmr: { cwd: 'web-app' },
+  staticApp: { root: 'web-app/dist' },
+  phases: ['base', 'core', 'engine', 'tail'],
+  modules: [
+    { id: 'my-plugin', phase: 'tail', spec: './src/my-plugin.ts',
+      client: { key: 'my-plugin/client.js' }, config: { port: 1 } },
+  ],
+  http: (ctx) => [{ handle: myGateway(ctx), healthz: () => ({ faces: 3 }) }],
+})
+await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 → 有界停机
+```
+
+条目经动态 `import(spec)` + `ctx.plugin` 挂载（class 插件加 `use: 'default'`），
+复杂接线走 `after` 钩子；`loadEnv`/注册表/编译编排/接线助手凑齐整套工具族。
+内核不读任何环境变量——开关与端口全部以普通配置值传入。
+
 ## 模块
 
 | 路径 | 内容 | 上游来源 |
@@ -112,7 +137,7 @@ buildRegisteredModules({ registry, rootDir, carrier: { id: 'web', cwd: 'web-app'
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest（60 例）
+pnpm test        # vitest（69 例）
 pnpm build       # tsdown 打包 JS + tsc 直出 d.ts 模块树
 pnpm check:dts   # 以外部消费者视角编译 dist 类型冒烟
 pnpm smoke       # 端到端启动 examples/hello
