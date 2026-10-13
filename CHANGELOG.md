@@ -6,7 +6,8 @@
 
 ### 新增
 
-- `examples/dev-app`——薄配置完整可跑演示：一份 `ling.config.mjs` 跑起 dev 服务器（三相插件双出口形态 + `createJsonRpcGateway` 内存凭据网关 + 静态 SPA + healthz）。`pnpm demo` 常驻把玩（浏览器 :8390）；`pnpm demo:check` 一条命令自检 5 项（登录发牌 / RPC 参数绑定 / 会话门拦未登录 / healthz / 静态下发）并进 CI。仓内演示走源码相对路径免构建直跑，消费者视角换包名 import 即同款。
+- `examples/dev-app`——薄配置完整可跑演示：一份 `ling.config.mjs` 跑起 dev 服务器（三相插件双出口形态 + `createJsonRpcGateway` 内存凭据网关 + 静态 SPA + healthz）。`pnpm demo` 常驻把玩（浏览器 :8390）；`pnpm demo:check` 一条命令自检并进 CI。仓内演示走源码相对路径免构建直跑，消费者视角换包名 import 即同款。
+- `examples/dev-app` 跨模块前后端两腿示例（demo1/demo2）：**后端**=demo2 `static inject = ['demo1']` 声明依赖（cordis 等侍语义，与挂载相序解耦），`report()` 面内经 `ctx.get('demo1')` 穿透组合，能力契约由 `Demo1Api` 接口跨模块显式化；**前端**=同一网关 faces 表登记多命名空间，浏览器换 `<ns>` 即达任一模块；自检 5→**7 项**（+demo1 直调 / +demo2 跨模块链断言 `via='demo1'` 且 `doubled=42`）。演示即验出并入册一坑：**`Service` 基类的 `name` 是服务名字符串成员——面方法命名避开 `name`**（被自有属性遮蔽，运行时 "not a function"、类型层 TS2416/2425）。
 
 ## [1.3.1] - 2026-10-13
 

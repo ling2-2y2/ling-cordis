@@ -5,31 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dev-app demo</title>
     <style>
-      body { font-family: system-ui, sans-serif; max-width: 34rem; margin: 4rem auto; padding: 0 1rem; }
-      button { padding: 0.4rem 1rem; cursor: pointer; }
+      body { font-family: system-ui, sans-serif; max-width: 36rem; margin: 3rem auto; padding: 0 1rem; }
+      button { padding: 0.4rem 0.9rem; margin: 0 0.4rem 0.4rem 0; cursor: pointer; }
       pre { background: #f4f4f4; padding: 0.8rem; border-radius: 6px; white-space: pre-wrap; }
+      code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 4px; }
     </style>
   </head>
   <body>
     <h1>dev-app demo</h1>
     <p>一份 <code>ling.config.mjs</code> 薄配置跑起来的最小平台：三相插件挂载 + JSON-RPC 网关（登录 / 参数绑定 / 会话门）+ 静态 SPA，全在同端口。</p>
-    <button id="go">登录并调用 demo.hello</button>
-    <pre id="out">（点按钮）</pre>
+    <p>
+      <button id="go">demo.hello</button>
+      <button id="direct">demo1.double（前端直调）</button>
+      <button id="cross">demo2.report（后端跨模块→demo1）</button>
+    </p>
+    <pre id="out">（点按钮；登录 demo/123456 自动完成）</pre>
     <script type="module">
       const out = document.getElementById('out')
-      document.getElementById('go').onclick = async () => {
-        out.textContent = '登录中（demo/123456）…'
+      const say = (line) => { out.textContent += `\n${line}` }
+      // 令牌缓存：首个动作登录一次，后续复用（会话门放行全靠它）
+      let token
+      const ensureToken = async () => {
+        if (token !== undefined) return token
         const login = await (await fetch('/api/auth/login', {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ account: 'demo', password: '123456' }),
         })).json()
-        out.textContent = `登录 ok=${login.ok} token=${login.token}\n调用 /api/demo/hello …`
-        const reply = await (await fetch('/api/demo/hello', {
-          method: 'POST', headers: { 'content-type': 'application/json', satoken: login.token },
-          body: JSON.stringify({ args: { name: '浏览器' } }),
-        })).json()
-        out.textContent += `\nRPC 应答：${JSON.stringify(reply)}`
+        token = login.ok === true ? login.token : ''
+        say(`登录 ok=${login.ok} token=${token}`)
+        return token
       }
+      const call = async (path, args) => {
+        const t = await ensureToken()
+        const reply = await (await fetch(path, {
+          method: 'POST', headers: { 'content-type': 'application/json', satoken: t },
+          body: JSON.stringify({ args }),
+        })).json()
+        say(`${path} → ${JSON.stringify(reply)}`)
+        return reply
+      }
+      document.getElementById('go').onclick = () => call('/api/demo/hello', { name: '浏览器' })
+      // 前端跨模块：换命名空间即达另一模块的面
+      document.getElementById('direct').onclick = () => call('/api/demo1/double', { n: 21 })
+      // 后端跨模块：浏览器只打 demo2 一个面，demo2.report 内部经 ctx.get('demo1') 穿透
+      document.getElementById('cross').onclick = () => call('/api/demo2/report', { n: 21 })
+      out.textContent = '（点按钮）'
     </script>
   </body>
 </html>
