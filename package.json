@@ -25,6 +25,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:dts": "tsc -p tsconfig.dts-smoke.json",
     "smoke": "node --import tsx/esm examples/hello/boot.mjs",
+    "demo": "node --import tsx/esm examples/dev-app/boot.mjs",
+    "demo:check": "node --import tsx/esm examples/dev-app/boot.mjs --check",
     "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {

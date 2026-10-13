@@ -2,6 +2,18 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- `examples/dev-app`——薄配置完整可跑演示：一份 `ling.config.mjs` 跑起 dev 服务器（三相插件双出口形态 + `createJsonRpcGateway` 内存凭据网关 + 静态 SPA + healthz）。`pnpm demo` 常驻把玩（浏览器 :8390）；`pnpm demo:check` 一条命令自检 5 项（登录发牌 / RPC 参数绑定 / 会话门拦未登录 / healthz / 静态下发）并进 CI。仓内演示走源码相对路径免构建直跑，消费者视角换包名 import 即同款。
+
+## [1.3.1] - 2026-10-13
+
+### 新增
+
+- `createJsonRpcGateway` 增 `onSession` 登录态确立回调（会话验签通过后随 token 调用——审计上下文/身份绑定挂点；测试钉）。
+
 ## [1.3.0] - 2026-10-13
 
 `/dev` 出口再下一城：JSON-RPC 网关内核——`POST /api/<ns>/<method>` 面分派的通用机制进框架，业务树网关只剩自家接线。
@@ -10,12 +22,6 @@
 
 - `src/dev/rpc.ts`——`createJsonRpcGateway(options)`：会话门（resolveSession/auth.resolve 双路线）→ 命名空间与方法查表（faces 表 + adopt 惰性收编钩子）→ 参数名绑定（`parameterNamesOf` 随批上收为公共件）→ `signal` 参数自动注入（应答 close 即 abort）→ 双形态应答（裸 `{ok,value}` / client-request→server-response 信封）→ 错误折叠（code+message）；可选认证三端点（login/me/logout，凭据语义 λ 注入，cookie 名可配）。
 - 测试 +5（req/res 最小仿真件直调 handle——内核与 HTTP 传输解耦；夹具时序坑在册：emit 须宏任务对齐真实 I/O），总数 74。
-
-## [1.3.1] - 2026-10-13
-
-### 新增
-
-- `createJsonRpcGateway` 增 `onSession` 登录态确立回调（会话验签通过后随 token 调用——审计上下文/身份绑定挂点；测试钉）。
 
 ## [1.2.1] - 2026-10-13
 

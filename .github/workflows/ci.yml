@@ -32,3 +32,4 @@ jobs:
             console.log('dist symbols OK');
           })"
       - run: pnpm smoke
+      - run: pnpm demo:check

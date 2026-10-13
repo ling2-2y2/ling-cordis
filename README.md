@@ -116,6 +116,12 @@ class plugins), complex wiring goes in `after` hooks, and `loadEnv` / registry /
 build / link helpers round out the kit. The kernel reads no environment
 variables — switches and ports arrive as plain config values.
 
+A complete runnable demo lives in [`examples/dev-app`](./examples/dev-app):
+`pnpm demo` boots it (open http://127.0.0.1:8390/), `pnpm demo:check`
+self-tests the whole chain (login → RPC arg binding → session gate → healthz →
+static SPA) and exits — that one command is the fastest way to judge the
+experience.
+
 ## Modules
 
 | Path | What it is | Upstream origin |

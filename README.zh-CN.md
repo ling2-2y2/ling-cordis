@@ -113,6 +113,10 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 复杂接线走 `after` 钩子；`loadEnv`/注册表/编译编排/接线助手凑齐整套工具族。
 内核不读任何环境变量——开关与端口全部以普通配置值传入。
 
+完整可跑演示见 [`examples/dev-app`](./examples/dev-app)：`pnpm demo` 起服
+（浏览器开 http://127.0.0.1:8390/）；`pnpm demo:check` 一条命令自检全链
+（登录 → RPC 参数绑定 → 会话门 → healthz → 静态 SPA）即退——验货最快路径。
+
 ## 模块
 
 | 路径 | 内容 | 上游来源 |
