@@ -4,6 +4,7 @@
   "description": "Standalone cordis runtime: contexts, plugin fibers, event bus, services, timer, schema validation (schemastery), and console logging.",
   "type": "module",
   "license": "MIT",
+  "packageManager": "pnpm@11.12.0",
   "author": "ling2-2y2",
   "repository": { "type": "git", "url": "git+https://github.com/ling2-2y2/ling-cordis.git" },
   "sideEffects": false,
@@ -13,7 +14,7 @@
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "LICENSE", "NOTICE.md", "README.md", "README.zh-CN.md"],
+  "files": ["dist", "src", "LICENSE", "NOTICE.md", "README.md", "README.zh-CN.md", "CHANGELOG.md"],
   "engines": { "node": ">=22" },
   "keywords": ["cordis", "dependency-injection", "ioc", "plugin", "fiber", "event-bus", "schema", "schemastery", "context"],
   "publishConfig": { "access": "public" },
