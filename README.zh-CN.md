@@ -14,6 +14,48 @@
 - **Schema**——schemastery 构建器：声明式配置模式、standard-schema v1 接口、`Volatile` 稳定引用配置。
 - **控制台日志**——分级输出、着色、diff 后缀、按名取色。
 
+## 架构分层
+
+四层——**你只写最顶层，其余三层都在包里**：
+
+```mermaid
+flowchart TD
+  subgraph L4["你的应用——唯一手写层"]
+    CFG["ling.config.mjs<br/>一份薄声明配置<br/>分相条目：spec + config + after"]
+    MOD["业务插件模块<br/>跨模块：static inject + ctx.get<br/>（示例 demo1/demo2，或 34 条目的平台树）"]
+    FE["浏览器 SPA"]
+  end
+  subgraph L3["/dev 工具族——import '@ling2/ling-cordis/dev'"]
+    KERNEL["runDevApp 载体内核<br/>env → Context → 分相挂载 → HTTP 面 → 有界停机"]
+    GW["createJsonRpcGateway<br/>会话门 · 面分派 · 参数绑定 · 认证三端点"]
+    HMR["createViteHmrBridge<br/>（vite 为使用方对等件，可选）"]
+    UTILS["ModuleRegistry · 编译编排 · 接线助手"]
+  end
+  subgraph L2["运行时——import '@ling2/ling-cordis'"]
+    CORE["Context 树 · Fiber 生命周期 · 事件总线 · Service 依赖注入"]
+    PLUGINS["Timer · LoggerConsole · schemastery"]
+  end
+  subgraph L1["kit 基座"]
+    KIT["cosmokit 工具 · Volatile"]
+  end
+
+  CFG --> KERNEL
+  MOD -->|"ctx.plugin() / static inject"| CORE
+  KERNEL --> GW
+  KERNEL --> CORE
+  GW --> UTILS
+  FE -->|"POST /api/命名空间/方法"| GW
+  FE -.->|"HMR ws + http 反代"| HMR
+  GW -->|"faces()"| MOD
+  CORE --> KIT
+  PLUGINS --> KIT
+```
+
+- **你的应用**——一份配置 + 插件模块；跨模块调用后端走 `static inject` + `ctx.get`，前端走换命名空间。
+- **/dev 工具族**——dev 服务器绕运行时之外的一切：载体内核、JSON-RPC 网关、vite HMR 桥、注册表/编译/接线助手。
+- **运行时**——本包发布的 cordis 血统内核。
+- **kit 基座**——零依赖工具箱，运行时建于其上。
+
 ## 环境要求
 
 - Node.js **≥ 22**（用到 `Promise.withResolvers`）

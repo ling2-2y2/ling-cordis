@@ -14,6 +14,48 @@ A standalone [cordis](https://github.com/koishijs/cordis)-lineage plugin runtime
 - **Schema** — the schemastery builder: declarative config schemas, standard-schema v1 interface, `Volatile` stable-reference configs.
 - **Console logger** — leveled logging with colors, diff suffixes, and per-name palette.
 
+## Architecture
+
+Four layers — you only ever write the top one; the other three ship in this package:
+
+```mermaid
+flowchart TD
+  subgraph L4["Your app — all you write"]
+    CFG["ling.config.mjs<br/>one thin declarative config<br/>phased entries: spec + config + after"]
+    MOD["business plugin modules<br/>cross-module: static inject + ctx.get<br/>(demo1/demo2 in examples, or a 34-entry platform tree)"]
+    FE["browser SPA"]
+  end
+  subgraph L3["/dev toolkit — import from '@ling2/ling-cordis/dev'"]
+    KERNEL["runDevApp carrier kernel<br/>env → Context → phased mounts → http faces → bounded shutdown"]
+    GW["createJsonRpcGateway<br/>session gate · face dispatch · arg binding · auth trio"]
+    HMR["createViteHmrBridge<br/>(vite is your peer dep, optional)"]
+    UTILS["ModuleRegistry · build orchestration · link helpers"]
+  end
+  subgraph L2["runtime — import from '@ling2/ling-cordis'"]
+    CORE["Context tree · fibers · event bus · Service DI"]
+    PLUGINS["Timer · LoggerConsole · schemastery"]
+  end
+  subgraph L1["kit base"]
+    KIT["cosmokit utilities · Volatile"]
+  end
+
+  CFG --> KERNEL
+  MOD -->|"ctx.plugin() / static inject"| CORE
+  KERNEL --> GW
+  KERNEL --> CORE
+  GW --> UTILS
+  FE -->|"POST /api/namespace/method"| GW
+  FE -.->|"HMR ws + http proxy"| HMR
+  GW -->|"faces()"| MOD
+  CORE --> KIT
+  PLUGINS --> KIT
+```
+
+- **Your app** — one config file plus plugin modules; cross-module calls are plain `static inject` + `ctx.get` (backend) and namespace swapping (frontend).
+- **/dev toolkit** — everything a dev server needs around the runtime: carrier kernel, JSON-RPC gateway, vite HMR bridge, registry/build/link helpers.
+- **runtime** — the cordis-lineage core this package ships as.
+- **kit** — dependency-free utilities the runtime builds on.
+
 ## Requirements
 
 - Node.js **≥ 22** (uses `Promise.withResolvers`)
