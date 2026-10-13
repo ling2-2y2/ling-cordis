@@ -57,7 +57,8 @@ export function resolveConfig(runtime: Plugin.Runtime, config: any) {
   if (result.issues) {
     throw new ValidationError(result.issues)
   } else {
-    return result.value
+    // issues 分支已抛出，此处必为成功形态；联合窄化经断言收口
+    return (result as { value: any }).value
   }
 }
 
@@ -542,7 +543,8 @@ export class Fiber {
 
     // prevent unhandled rejection — both from `task` itself and from the
     // disposer chain if it fails to settle cleanly.
-    task?.catch(() => {
+    // task 为空时经 Promise.resolve 归一为已决议态，两个 catch 均不触发——与 task?.catch 短路等价
+    Promise.resolve(task).catch(() => {
       if (!runner.epoch) return dispose()
       return finalizeDisposal(dispose)
     }).catch((error) => this.ctx.logger.error(error))
@@ -580,7 +582,7 @@ export class Fiber {
 
   private _updateState(callback: () => void | FiberState) {
     const oldState = this.state
-    this.state = callback() ?? this._getState()
+    this.state = (callback() as FiberState | undefined) ?? this._getState()
     if (oldState === this.state) return
     // FIXME internal/fiber-info
     this.context.emit('internal/status', this, oldState)

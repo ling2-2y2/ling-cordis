@@ -116,7 +116,7 @@ export function getPropertyDescriptor(target: any, prop: string | symbol) {
 /** Wrap services/functions so method calls see the caller's active context. */
 export function getTraceable<T>(ctx: Context, value: T): T {
   if (!isObject(value)) return value
-  if (Object.hasOwn(value, symbols.shadow)) {
+  if (Object.hasOwn(value as object, symbols.shadow)) {
     return Object.getPrototypeOf(value)
   }
   const tracker = value[symbols.tracker]

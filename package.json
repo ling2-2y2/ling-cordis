@@ -1,0 +1,39 @@
+{
+  "name": "@ling2/ling-cordis",
+  "version": "1.0.0",
+  "description": "Standalone cordis runtime: contexts, plugin fibers, event bus, services, timer, schema validation (schemastery), and console logging.",
+  "type": "module",
+  "license": "MIT",
+  "author": "ling2-2y2",
+  "repository": { "type": "git", "url": "git+https://github.com/ling2-2y2/ling-cordis.git" },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "LICENSE", "NOTICE.md", "README.md", "README.zh-CN.md"],
+  "engines": { "node": ">=22" },
+  "keywords": ["cordis", "dependency-injection", "ioc", "plugin", "fiber", "event-bus", "schema", "schemastery", "context"],
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:dts": "tsc -p tsconfig.dts-smoke.json",
+    "smoke": "node --import tsx/esm examples/hello/boot.mjs",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.1.0",
+    "supports-color": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsdown": "^0.22.14",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
