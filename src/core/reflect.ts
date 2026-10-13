@@ -1,5 +1,5 @@
-import { defineProperty, isNullable } from '@deepseek-ai/cosmokit'
-import type { Dict } from '@deepseek-ai/cosmokit'
+import { defineProperty, isNullable } from '../kit/index.ts'
+import type { Dict } from '../kit/index.ts'
 import { Context } from './context.ts'
 import { getTraceable, symbols, withProps } from './utils.ts'
 import { Fiber, FiberState } from './fiber.ts'

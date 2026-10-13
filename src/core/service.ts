@@ -1,4 +1,4 @@
-import { defineProperty } from '@deepseek-ai/cosmokit'
+import { defineProperty } from '../kit/index.ts'
 import { Context } from './context.ts'
 import { createCallable, joinPrototype, symbols, type Tracker } from './utils.ts'
 
