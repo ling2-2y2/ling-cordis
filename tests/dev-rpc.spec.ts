@@ -183,3 +183,82 @@ function sendRaw(ctx: RpcContext, body: unknown): void {
   ctx.res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
   ctx.res.end(JSON.stringify(body))
 }
+
+// ── 迟写形态（fire-and-forget 认领防双写——2026-10-14 dev 载体 /api/a2a/card 崩溃）──
+// 病灶：内层 handler 内 `void 异步处理`（树内裸路由惯例）——认领时响应未落笔，
+// responder 抢发 200 空值应答后，迟到的 writeHead 抛 ERR_HTTP_HEADERS_SENT、
+// 未捕获 rejection 杀进程。修：responder 迟写分支等落笔/收尾再判。
+
+/** 带收尾事件的应答仿真（end→finish、断开→close；对位真实 ServerResponse 事件面）。 */
+function fakeResEmitting() {
+  const captured = { status: 0, body: '', finished: false }
+  const res = new EventEmitter() as EventEmitter & {
+    writeHead(status: number, headers?: Record<string, unknown>): void
+    setHeader(key: string, value: string): void
+    end(out?: string): void
+    readonly headersSent: boolean
+    readonly writableEnded: boolean
+  }
+  res.writeHead = (status: number, headers: Record<string, unknown> = {}): void => {
+    captured.status = status
+    for (const key of Object.keys(headers)) res.setHeader(key, String(headers[key]))
+  }
+  res.setHeader = (): void => { /* 头表内容非本组断言面 */ }
+  res.end = (out = ''): void => {
+    captured.body = out
+    captured.finished = true
+    setImmediate(() => res.emit('finish'))
+  }
+  // getter 须经 defineProperty 挂（Object.assign 会把 getter 摊平成静态值）
+  Object.defineProperty(res, 'headersSent', { get: () => captured.status !== 0 })
+  Object.defineProperty(res, 'writableEnded', { get: () => captured.finished })
+  return { res, captured }
+}
+
+describe('jsonResponder 迟写形态（fire-and-forget 认领防双写）', () => {
+  it('认领而未落笔未存值——不抢发，等内层自身落笔胜出', async () => {
+    const { res, captured } = fakeResEmitting()
+    const handle = createRpcServer({ layers: [
+      jsonResponder(),
+      // 树内裸路由惯例形态：void 异步处理，跨宏任务后才落笔
+      async () => {
+        void (async () => {
+          await new Promise((resolve) => { setTimeout(resolve, 20) })
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ name: 'late-card' }))
+        })()
+        return true
+      },
+    ] })
+    const claimed = await handle(fakeReq('GET', '/api/a2a/card') as never, res as never)
+    expect(claimed).toBe(true)
+    // 修前病态：抢发 {ok:true,value:null} + 迟到 writeHead 抛 ERR_HTTP_HEADERS_SENT
+    expect(JSON.parse(captured.body)).toEqual({ name: 'late-card' })
+  })
+
+  it('faceInvoker void 返回值仍由 responder 应答（invoked 位不放行迟写分支）', async () => {
+    class OpsFace { touch() { /* void 返回 */ } }
+    const facesMap = new Map([['ops', { service: new OpsFace(), markers: [{ method: 'touch' }] }]]) as Map<string, RpcFaceEntry>
+    const { res, captured } = fakeResEmitting()
+    const handle = createRpcServer({ layers: [jsonResponder(), faceInvoker({ faces: () => facesMap })] })
+    const claimed = await handle(fakeReq('POST', '/api/ops/touch', { args: {} }) as never, res as never)
+    expect(claimed).toBe(true)
+    expect(captured.status).toBe(200)
+    expect(JSON.parse(captured.body)).toEqual({ ok: true, value: null })
+  })
+
+  it('认领者从不落笔而连接断开——收尾补发不死（流错误吸收）', async () => {
+    const { res, captured } = fakeResEmitting()
+    const handle = createRpcServer({ layers: [
+      jsonResponder(),
+      async () => {
+        setImmediate(() => res.emit('close')) // 客户端断开，认领者始终未落笔
+        return true
+      },
+    ] })
+    const claimed = await handle(fakeReq('GET', '/x') as never, res as never)
+    expect(claimed).toBe(true)
+    expect(captured.status).toBe(200) // 停摆尾补发（死连接上，错误已吸收）
+    res.emit('error', new Error('死连接流错误意象'))
+  })
+})

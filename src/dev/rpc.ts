@@ -8,7 +8,8 @@
  *
  * **机械件（可组合，显式排层）**：
  * - jsonResponder——洋葱内唯一发送者：内层跑完按 ctx.value/ctx.failure/ctx.status
- *   应答（信封形态随 ctx.envelope）；
+ *   应答（信封形态随 ctx.envelope）；内层认领而未落笔未存值（fire-and-forget
+ *   迟写形态）则等其自身落笔，不抢发（防双写杀进程）；
  * - faceInvoker——通用 RPC 协议件：`POST /api/<ns>/<method>` 查面→标记匹配→
  *   参数名绑定（parameterNamesOf）→ signal 注入 → invoke 写 ctx.value（不发送）。
  *
@@ -48,6 +49,8 @@ export interface RpcContext {
   rpcId?: string
   /** invoke 成功值（发送前任何内层可改写）。 */
   value?: unknown
+  /** 协议件已跑位（faceInvoker 成功 invoke 后置——void 返回值也欠 responder 一次应答，迟写分支不放行）。 */
+  invoked?: boolean
   /** 失败（协议 404/400 或 invoke 抛错折成；发送前可改写）。 */
   failure?: { code: string; message: string }
   /** 应答状态码（responder 取此，缺省 200；门层拒绝可置 401 等）。 */
@@ -134,6 +137,15 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   rpcSendJson(res, status, body)
 }
 
+/** 等响应首次落笔或收尾（finish=正常收尾 / close=含连接断开），先到者解栅。 */
+function settleWhenWritten(res: ServerResponse): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => { res.off('finish', done); res.off('close', done); resolve() }
+    res.once('finish', done)
+    res.once('close', done)
+  })
+}
+
 const failureOf = (error: unknown): { code: string; message: string } => ({
   code: (typeof (error as { code?: string })?.code === 'string' && (error as { code?: string }).code) || 'gateway/internal',
   message: error instanceof Error ? error.message : String(error),
@@ -197,10 +209,17 @@ export function createRpcFace(options: RpcServerOptions & { healthz?: () => Reco
 
 // ── 机械件（可组合，显式排层；无任何自动挂载）──────────────────────────────
 
-/** 机械件①：洋葱的应答汇——内层跑完按 ctx 应答（value/failure/status/信封），
+/**
+ * 机械件①：洋葱的应答汇——内层跑完按 ctx 应答（value/failure/status/信封），
  * 内层抛错在此折叠为 failure。**排最外层**（一切业务件之前）：内层自带应答
- * （headersSent）则让路；内层置 ctx.value/failure/status 返回 true 则由本件发送。
- * 改写 value 的审计件排在 invoker 之外（发送前最后一站）。 */
+ * （headersSent）则让路；内层置 ctx.value/failure/status 返回 true 则由本件发送；
+ * 内层认领而四皆无（未落笔/无 value/无 failure/无 status 且 invoked 未置）=
+ * **迟写形态**（fire-and-forget 裸路由惯例：handler 内 void 异步处理，将来自带
+ * 落笔）——本件等响应真正落笔/收尾再判，绝不抢发（抢发会与迟到的落笔双写，
+ * 后到的 writeHead 抛 ERR_HTTP_HEADERS_SENT、未捕获 rejection 杀进程——
+ * 2026-10-14 dev 载体 /api/a2a/card 崩溃实证）。
+ * 改写 value 的审计件排在 invoker 之外（发送前最后一站）。
+ */
 export function jsonResponder(): RpcMiddleware {
   return async (ctx, next) => {
     let handled: boolean
@@ -212,6 +231,14 @@ export function jsonResponder(): RpcMiddleware {
     }
     if (handled !== true) return handled
     if (ctx.res.headersSent) return true
+    if (ctx.invoked !== true && ctx.value === undefined && ctx.failure === undefined && ctx.status === undefined) {
+      // 迟写形态：等内层自身的落笔/收尾，再回来走发送判定。
+      await settleWhenWritten(ctx.res)
+      if (ctx.res.headersSent) return true
+      // 停摆尾（连接收尾而认领者从未落笔）：补发落在死连接上，吸掉流错误，
+      // 不让收尾写入升级成进程级未捕获异常。
+      ctx.res.once('error', () => {})
+    }
     if (ctx.failure !== undefined) {
       sendJson(ctx.res, ctx.status ?? 200, ctx.envelope === true
         ? { type: 'server-response', rpcId: ctx.rpcId, result: { ok: false, error: { code: ctx.failure.code, message: ctx.failure.message, details: {} } } }
@@ -277,6 +304,9 @@ export function faceInvoker(options: { faces: () => Map<string, RpcFaceEntry>; a
       effective.signal = controller.signal
     }
     ctx.value = await Reflect.apply(fn as () => unknown, entry.service, names.map(name => effective[name]))
+    // invoked 位：void 返回值（value===undefined）也欠 responder 一次应答——
+    // 迟写分支只放行「认领而四皆无」的 fire-and-forget 形态，不误伤协议件。
+    ctx.invoked = true
     return true
   }
 }
