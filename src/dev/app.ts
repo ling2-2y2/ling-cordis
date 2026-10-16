@@ -20,6 +20,9 @@ import Timer from '../plugins/timer.ts'
 import { ModuleRegistry, type ModuleEntry } from './registry.ts'
 import { createViteHmrBridge, type ViteHmrBridge } from './hmr.ts'
 
+/** 404 未命中去重表（方法+路径 → 次数；首见告警，进程级）。 */
+const missedRoutes = new Map<string, number>()
+
 /** .env 装配：解析 key=value 行（parseEnv 语义）注入 process.env（不覆盖显式注入）。 */
 export function loadEnv(file: string, defaults: Record<string, string> = {}): void {
   if (existsSync(file)) {
@@ -248,7 +251,16 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     }
     const url = new URL(req.url ?? '/', 'http://localhost')
     const pathname = url.pathname
-    const notFound = () => sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `not found: ${req.method} ${pathname}` } })
+    // 路由未命中观测（2026-10-16 上传 404 静默事故立法）：404 曾零日志——前端只
+    // 见兜底文案、后端控制台无线索，排障无从下手。同 miss 只告警首见（防资产类
+    // 重复刷屏），重复计数进 missedRoutes。
+    const notFound = () => {
+      const key = `${req.method} ${pathname}`
+      const hits = (missedRoutes.get(key) ?? 0) + 1
+      missedRoutes.set(key, hits)
+      if (hits === 1) console.warn(`[${label}] 路由未命中(404)：${key}`)
+      return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `not found: ${key}` } })
+    }
 
     const redirect = config.redirects?.[pathname]
     if (req.method === 'GET' && redirect !== undefined) {
@@ -295,6 +307,8 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
 
   const server = createServer((req, res) => {
     void handleInner(req, res).catch((error) => {
+      // 500 曾零日志（404 静默同族——2026-10-16 上传排障立法）：内部错必须上控制台
+      console.error(`[${label}] 内部错误(500)：${req.method} ${req.url}`, error)
       if (!res.headersSent) sendJson(res, 500, { ok: false, error: { code: 'gateway/internal', message: error instanceof Error ? error.message : String(error) } })
       else res.end()
     })
