@@ -224,8 +224,8 @@ function applyTraceable(proxy: any, value: any, thisArg: any, args: any[]) {
 
 /** Create a callable service object that dispatches through `symbols.invoke`. */
 export function createCallable(name: string, proto: {}, tracker: Tracker) {
-  const self = function (...args: any[]) {
-    const proxy = createTraceable(self['ctx'], self, tracker)
+  const self = function (this: any, ...args: any[]) {
+    const proxy = createTraceable((self as any).ctx, self, tracker)
     return applyTraceable(proxy, self, this, args)
   }
   defineProperty(self, 'name', name)
@@ -271,7 +271,7 @@ export function composeError<T>(callback: (info: StackInfo) => T, getOuterStack 
   try {
     const result: any = callback(info)
     if (isObject(result) && 'then' in result) {
-      return (result as any).then(undefined, (reason) => handleError(info, reason, getOuterStack)) as T
+      return (result as any).then(undefined, (reason: any) => handleError(info, reason, getOuterStack)) as T
     } else {
       return result
     }
