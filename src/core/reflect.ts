@@ -146,13 +146,13 @@ export class ReflectService {
       try {
         const def = target.reflect.props[prop]
         if (def?.type === 'accessor') {
-          return def.get.call(ctx, ctx[symbols.receiver], error)
+          return def.get.call(ctx, (ctx as any)[symbols.receiver], error)
         }
 
         if (!ctx.fiber.runtime) return ctx.reflect.get(prop, false)
         return ctx.events.waterfall('internal/get', ctx, prop, error, () => {
           const key = target[symbols.isolate][prop]
-          let fiber = (ctx[symbols.shadow] as Context ?? ctx).fiber
+          let fiber = ((ctx as any)[symbols.shadow] as Context ?? ctx).fiber
           while (true) {
             const impl = fiber.store?.[prop]
             if (impl) return getTraceable(ctx, impl.value)
@@ -185,7 +185,7 @@ export class ReflectService {
       try {
         if (def.type === 'accessor') {
           if (!def.set) return false
-          return def.set.call(ctx, value, ctx[symbols.receiver], error)
+          return def.set.call(ctx, value, (ctx as any)[symbols.receiver], error)
         }
 
         return ctx.events.waterfall('internal/set', ctx, prop, value, error, () => {
@@ -329,7 +329,7 @@ export class ReflectService {
     }
     for (const name of names) {
       const self: Context = Object.create(this.ctx)
-      self[symbols.filter] = (target: Context) => filter(target, name)
+      ;(self as any)[symbols.filter] = (target: Context) => filter(target, name)
       this.ctx.events.emit(self, 'internal/service', name, this._getImpl(name, false)?.value)
     }
     return fibers
@@ -367,7 +367,7 @@ export class ReflectService {
       const entries = Array.isArray(mixins) ? mixins.map(key => [key, key]) : Object.entries(mixins)
       const getTarget = (ctx: Context, error: Error) => {
         // TODO enhance error message
-        return ctx[source]
+        return (ctx as any)[source]
       }
       for (const [key, value] of entries) {
         yield self.accessor(value, {

@@ -63,8 +63,8 @@ export class Context {
   }
 
   static {
-    Context.is[Symbol.toPrimitive] = () => Symbol.for('cordis.is')
-    Context.prototype[Context.is as any] = true
+    ;(Context.is as any)[Symbol.toPrimitive] = () => Symbol.for('cordis.is')
+    ;(Context.prototype as any)[Context.is as any] = true
   }
 
   /** Create the root context and install the built-in services. */

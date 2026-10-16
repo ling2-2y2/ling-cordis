@@ -89,7 +89,7 @@ export function isConstructor(func: any): func is new (...args: any) => any {
 }
 
 /** Merge two prototype chains while preserving descriptors from `proto1`. */
-export function joinPrototype(proto1: {}, proto2: {}) {
+export function joinPrototype(proto1: {}, proto2: {}): any {
   if (proto1 === Object.prototype) return proto2
   const result = Object.create(joinPrototype(Object.getPrototypeOf(proto1), proto2))
   for (const key of Reflect.ownKeys(proto1)) {
@@ -119,7 +119,7 @@ export function getTraceable<T>(ctx: Context, value: T): T {
   if (Object.hasOwn(value as object, symbols.shadow)) {
     return Object.getPrototypeOf(value)
   }
-  const tracker = value[symbols.tracker]
+  const tracker = (value as any)[symbols.tracker]
   if (!tracker) return value
   return createTraceable(ctx, value, tracker)
 }
@@ -167,7 +167,7 @@ function createTraceable(ctx: Context, value: any, tracker: Tracker) {
   // derive its name): keep the shadow ctx so they can read [symbols.shadow]
   // and resolve the origin. Non-noShadow services strip — their side effects
   // bind to caller, not origin.
-  if (ctx[symbols.shadow] && !tracker.noShadow) {
+  if ((ctx as any)[symbols.shadow] && !tracker.noShadow) {
     ctx = Object.getPrototypeOf(ctx)
   }
   const proxy = new Proxy(value, {

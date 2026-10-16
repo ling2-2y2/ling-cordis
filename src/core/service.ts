@@ -40,21 +40,21 @@ export abstract class Service<out T = never> {
    * @param name — the service name; defaults to the static `provide` field.
    */
   constructor(protected ctx: Context, name: string) {
-    name ??= this.constructor['provide'] as string
+    name ??= (this.constructor as any)['provide'] as string
 
     let self = this
     const tracker: Tracker = {
       associate: name,
       property: 'ctx',
     }
-    if (self[symbols.invoke]) {
+    if ((self as any)[symbols.invoke]) {
       self = createCallable(name, joinPrototype(Object.getPrototypeOf(this), Function.prototype), tracker)
     }
     self.ctx = ctx
     self.name = name
     defineProperty(self, symbols.tracker, tracker)
 
-    self.ctx.reflect.provide(name, self, this[symbols.check])
+    self.ctx.reflect.provide(name, self, (this as any)[symbols.check])
     return self
   }
 
@@ -64,8 +64,8 @@ export abstract class Service<out T = never> {
 
   protected [symbols.extend](props?: any) {
     let self: any
-    if (this[Service.invoke]) {
-      self = createCallable(this.name, this, this[symbols.tracker])
+    if ((this as any)[Service.invoke]) {
+      self = createCallable(this.name, this, (this as any)[symbols.tracker])
     } else {
       self = Object.create(this)
     }
@@ -94,8 +94,8 @@ export abstract class Service<out T = never> {
     }
     if (base) configs.unshift(base)
     if (head) configs.push(head)
-    if (this['Config']?.merge) {
-      return this['Config'].merge(...configs)
+    if ((this as any)['Config']?.merge) {
+      return (this as any)['Config'].merge(...configs)
     } else {
       return Object.assign({}, ...configs)
     }

@@ -141,11 +141,11 @@ export class EventsService {
       if (name === 'internal/update' && !options.global) {
         const hooks = this.fiber._hooks['internal/update'] ??= new DisposableList()
         const method = options.prepend ? 'unshift' : 'push'
-        return hooks[method](listener)
+        return (hooks as any)[method](listener)
       }
     })
 
-    this.on('internal/update', function (config, noSave, next) {
+    this.on('internal/update', function (this: any, config, noSave, next) {
       const cbs = [...this._hooks['internal/update'] || []]
       const _next = () => {
         const cb = cbs.shift() ?? next
@@ -310,7 +310,7 @@ export class EventsService {
    * @returns a disposer removing the listener; `true` if it was still registered.
    */
   once(name: string, listener: (...args: any) => any, options?: boolean | EventOptions) {
-    const dispose = this.on(name, function (...args: any[]) {
+    const dispose = this.on(name, function (this: any, ...args: any[]) {
       dispose()
       return listener.apply(this, args)
     }, options)

@@ -76,7 +76,7 @@ export interface Logger extends LoggerOptions {}
 export interface Logger extends Record<LoggerType, LoggerMethod> {}
 
 function isAggregateError(error: any): error is Error & { errors: Error[] } {
-  return error instanceof Error && Array.isArray(error['errors'])
+  return error instanceof Error && Array.isArray((error as any)['errors'])
 }
 
 /** Logger facade for one named subsystem. */

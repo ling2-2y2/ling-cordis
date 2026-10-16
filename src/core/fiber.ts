@@ -248,7 +248,7 @@ export class Fiber {
       this._runner = {
         epoch: INACTIVE,
         getOuterStack,
-        execute: function () {
+        execute: function (this: Fiber) {
           if (isConstructor(runtime.callback)) {
             // eslint-disable-next-line new-cap
             const instance = new runtime.callback(this.ctx, this.config)
@@ -449,8 +449,8 @@ export class Fiber {
       collect: (dispose) => {
         disposables.push(dispose)
         this._disposables.delete(dispose)
-        if (dispose[symbols.effect]) {
-          meta.children.push(dispose[symbols.effect])
+        if ((dispose as any)[symbols.effect]) {
+          meta.children.push((dispose as any)[symbols.effect])
         }
       },
       getOuterStack: buildOuterStack(),
@@ -569,7 +569,7 @@ export class Fiber {
    */
   getEffects() {
     return [...this._disposables]
-      .map<EffectMeta>(dispose => dispose[symbols.effect])
+      .map<EffectMeta>(dispose => (dispose as any)[symbols.effect])
       .filter(Boolean)
   }
 
