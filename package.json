@@ -6,19 +6,56 @@
   "license": "MIT",
   "packageManager": "pnpm@11.12.0",
   "author": "ling2-2y2",
-  "repository": { "type": "git", "url": "git+https://github.com/ling2-2y2/ling-cordis.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ling2-2y2/ling-cordis.git"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./dev": { "types": "./dist/dev/index.d.ts", "import": "./dist/dev/index.js" },
-    "./package.json": "./package.json"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./dev": {
+      "types": "./dist/dev/index.d.ts",
+      "import": "./dist/dev/index.js"
+    },
+    "./package.json": "./package.json",
+    "./webserver": {
+      "types": "./dist/webserver/index.d.ts",
+      "import": "./dist/webserver/index.js"
+    }
   },
-  "files": ["dist", "src", "LICENSE", "NOTICE.md", "README.md", "README.zh-CN.md", "CHANGELOG.md"],
-  "engines": { "node": ">=22" },
-  "keywords": ["cordis", "dependency-injection", "ioc", "plugin", "fiber", "event-bus", "schema", "schemastery", "context", "vite", "hmr"],
-  "publishConfig": { "access": "public" },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "cordis",
+    "dependency-injection",
+    "ioc",
+    "plugin",
+    "fiber",
+    "event-bus",
+    "schema",
+    "schemastery",
+    "context",
+    "vite",
+    "hmr"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown && tsc -p tsconfig.build.json",
     "test": "vitest run",
