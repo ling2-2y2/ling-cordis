@@ -72,7 +72,9 @@ function tarContext(root) {
   const fileName = `ling-cordis-rel-ctx-${Date.now()}.tgz`
   const run = spawnSync('tar', [
     '-czf', `../../dist/${fileName}`,
-    '--exclude', 'node_modules', '--exclude', 'dist', '--exclude', 'client', '--exclude', '.env', '.',
+    // 排除项一律 ./ 根级锚定：GNU tar 的 --exclude 按成员名匹配任意层级——裸 'client'
+    // 会把源码目录 src/client 一并排除（129 构建 esbuild 找不到入口实证）
+    '--exclude', './node_modules', '--exclude', './dist', '--exclude', './client', '--exclude', './.env', '.',
   ], { cwd: join(root, 'examples', 'hmr-react') })
   if (run.status !== 0) throw new Error(`构建上下文打包失败（tar exit ${String(run.status)}：${String(run.stderr ?? '').slice(-300)}）`)
   return { file: join(outDir, fileName), bytes: statSync(join(outDir, fileName)).size }
@@ -139,7 +141,14 @@ function push() {
     if (url === undefined) continue
     if (DRY_RUN) { console.log(`  [dry-run] ${name}: git push <authed> main`); continue }
     console.log(`  ▷ push ${name}`)
-    const run = spawnSync('git', ['push', url, 'main'], { cwd: repoRoot, stdio: 'inherit', shell: true })
+    // 两段式：先裸 push（走系统凭据管理器——Windows credential manager 存有 PAT 时即通，
+    // 实证 GitHub 侧此路通）；失败回落 .env 凭据 URL 注入（GitHub 已废账号密码认证，
+    // 注入路仅在 password 实为 PAT 时可用）
+    let run = spawnSync('git', ['push', name, 'main'], { cwd: repoRoot, stdio: 'inherit', shell: true })
+    if (run.status !== 0 && url !== undefined) {
+      console.log(`  ▷ 裸 push 未通，回落 .env 凭据注入`)
+      run = spawnSync('git', ['push', url, 'main'], { cwd: repoRoot, stdio: 'inherit', shell: true })
+    }
     if (run.status !== 0) throw new Error(`git push ${name} 失败（exit ${String(run.status)}）`)
   }
 }

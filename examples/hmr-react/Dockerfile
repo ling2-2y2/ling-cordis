@@ -31,10 +31,14 @@ RUN sed -i "s|from '../../src/dev/index.ts'|from '@ling2/ling-cordis/dev'|g" boo
 FROM node:22-bookworm-slim AS runtime
 ARG LING_CORDIS_VERSION=latest
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8391
-WORKDIR /app
-# 重写后的 package.json（含钉版本的框架依赖）先落，再装运行依赖（pnpm add 只装该包，不装 devDeps）
-COPY --from=build /app/package.json ./
-RUN corepack enable && pnpm add @ling2/ling-cordis@${LING_CORDIS_VERSION}
+# 工作目录名必须=hmr-react：ling.config.mjs 的 rootDir=上一级，/packages 表按
+# join(rootDir, 'hmr-react', 'client/client.js') 寻址（仓内 examples 布局同款约定）
+WORKDIR /srv/hmr-react
+# 运行依赖：从 build 阶段带 package.json/lock/workspace.yaml，--prod 只装 dependencies
+# （=框架包本身；devDeps 的 vite/esbuild 不进运行镜像）。--prod 档 pnpm add 会全量
+# resolve devDeps 触发 esbuild 构建脚本门禁（129 实证）——故用 install --prod。
+COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --prod --frozen-lockfile
 # 重写后的消费方形态启动两件（从 build 阶段拷——上下文里是演示形态）
 COPY --from=build /app/boot.mjs /app/ling.config.mjs ./
 COPY --from=build /app/dist ./dist
