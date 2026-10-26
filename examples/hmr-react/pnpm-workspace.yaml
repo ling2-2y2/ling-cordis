@@ -1,0 +1,6 @@
+# pnpm v10+ 构建脚本门禁声明（与 ling-cordis 仓根同款口径）：
+# esbuild 的 postinstall 无需执行（预编译二进制经 optional dependencies 就位），
+# 显式声明 false——否则容器/CI 态 pnpm 以 ERR_PNPM_IGNORED_BUILDS 拒装（129 构建实证）。
+# 本文件不是 workspace 声明（本项目独立安装 --ignore-workspace），仅承载 pnpm 配置。
+allowBuilds:
+  esbuild: false

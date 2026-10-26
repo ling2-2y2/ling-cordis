@@ -17,8 +17,9 @@ FROM node:22-bookworm-slim AS build
 ARG LING_CORDIS_VERSION=latest
 WORKDIR /app
 ENV CI=1
-COPY package.json pnpm-lock.yaml ./
-# 依赖层单独拷：源码改动不打湿依赖层（构建缓存的关键）
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# 依赖层单独拷：源码改动不打湿依赖层（构建缓存的关键）；workspace.yaml=allowBuilds
+# 门禁声明必须随依赖层进场（缺席=pnpm v10+ 以 ERR_PNPM_IGNORED_BUILDS 拒装，129 实证）
 RUN corepack enable && pnpm install --frozen-lockfile
 COPY . .
 # 演示形态 → 消费方形态：三处相对 import 重写为 npm 包出口（本镜像正典=消费方形态）
