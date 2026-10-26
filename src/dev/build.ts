@@ -12,9 +12,10 @@ import { join } from 'node:path'
 import type { ModuleRegistry } from './registry.ts'
 
 /** 编译编排项。 */
-export interface BuildRegisteredOptions {
-  /** 模块注册表（有 client 键的条目即有浏览器产物）。 */
-  registry: ModuleRegistry
+export interface BuildRegisteredOptions<TEnv = unknown> {
+  /** 模块注册表（有 client 键的条目即有浏览器产物；TEnv 泛型透传——具化注册表
+   *  （如 ModuleRegistry<MountEnv>）直传无需擦除，strict 不变型修正）。 */
+  registry: ModuleRegistry<TEnv>
   /** 树根绝对路径（模块目录 = join(rootDir, id)）。 */
   rootDir: string
   /** 模块构建脚本名，缺省 'build:client'。 */
@@ -47,7 +48,7 @@ function runScript(target: string, cwd: string, script: string): void {
 }
 
 /** 编译编排主入口（同步执行，逐目标打印进度）。 */
-export function buildRegisteredModules(options: BuildRegisteredOptions): void {
+export function buildRegisteredModules<TEnv>(options: BuildRegisteredOptions<TEnv>): void {
   const { registry, rootDir, script = 'build:client', carrier, targets, skipCarrier } = options
 
   if (targets !== undefined && targets.length > 0) {

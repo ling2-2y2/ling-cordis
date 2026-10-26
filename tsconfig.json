@@ -8,7 +8,9 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "strict": false
+    // 2026-10-26 架构评审 O5：全仓 strict 直开（探测=存量 0 错——代码本就按严格
+    // 标准写，闸门跟上即可；原计划 vendored 血统分档豁免作废，无需豁免）
+    "strict": true
   },
   "include": ["src", "tests", "examples", "vitest.config.ts", "tsdown.config.ts"],
   "exclude": ["examples/hmr-react/src"]

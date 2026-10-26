@@ -58,8 +58,9 @@ export function runCheckScripts(options: RunCheckOptions): CheckReport {
   return { ok: failed.length === 0, passed, failed }
 }
 
-/** 注册表驱动检查：全部登记模块在其包目录（join(rootDir, id)）跑 check 脚本。 */
-export function checkRegisteredModules(options: { registry: ModuleRegistry, rootDir: string, script?: string }): CheckReport {
+/** 注册表驱动检查：全部登记模块在其包目录（join(rootDir, id)）跑 check 脚本
+ *  （TEnv 泛型透传——具化注册表直传，同 build.ts strict 不变型修正）。 */
+export function checkRegisteredModules<TEnv>(options: { registry: ModuleRegistry<TEnv>, rootDir: string, script?: string }): CheckReport {
   const targets: CheckTarget[] = options.registry.all()
     .map((entry) => ({ id: entry.id, cwd: join(options.rootDir, entry.id), script: options.script }))
   return runCheckScripts({ targets })
