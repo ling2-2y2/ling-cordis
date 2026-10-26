@@ -2,9 +2,15 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [2.3.0] - 2026-10-26
+## [2.3.0] - 2026-10-26（已发布 npm）
 
 ### 新增（2026-10-26 用户令「坑知识进框架，简化使用方」吸收批）
+
+- **前缀单源 `basePath`**（架构评审 O3 裁定落地）：`DevAppConfig` 增可选顶级键 `basePath`（缺省 `'/app'`，尾斜杠容错归一）——`staticApp.urlPrefix` 与 `hmr.base` 未显式设置时由它派生（urlPrefix=去尾杠、vite base=补尾杠），显式设置保留（越具体越优先）；防「前缀写两处、改一漏一=资产 404 静默错位」。`tests/base-path.spec.ts` 5 例钉派生/覆盖/归一/缺省不回归。
+- **容器化三件套**（架构评审 O4+裁-2/裁-3）：`examples/hmr-react/{Dockerfile,.dockerignore,compose.yaml}`——多阶段镜像（构建期 sed 重写三处相对 import 为 `@ling2/ling-cordis/dev` 出口=消费方形态正典；运行期 `pnpm install --prod` 仅框架包，vite/esbuild/tsx 不进镜像）；Debian bookworm-slim 基底（裁-2）+非 root+`HEALTHCHECK` 打 `/healthz`+SIGTERM 有界停机；`ling.config.mjs` 增 `HOST` env 行（容器 0.0.0.0 由使用方薄壳读，框架 `/dev` 零 env 纪律不破）。
+- **发布流水线 `scripts/release.mjs`**（裁-6 用户裁定：本地脚本编排，不走 GitHub Actions）：每流程节点一方法（gates 门禁四连/publish 发 npm/push 双远端两段式/remote 129 构建/run 重建容器/verify 探活三断言，`all` 全串；`--dry-run` 外发保护；`--image-version` 钉版）+`scripts/remote-exec.py`（paramiko 薄桥）。129 全链验证绿：镜像构建/容器 healthy+非 root/探活三断言/docker stop 有界停机。
+- CI 增 `example-hmr-react`（标准模板三命令进机器门禁）与 `image`（Dockerfile 可构建性）两 job；`dts-smoke.ts` 翻旧账（退役桥符号换现役 `createViteEmbed`/`ViteEmbed`+补 basePath 类型面——check:dts 存量红修复）。
+- 本版 npm 发布时点：仓 commit 8f4156e（含上述 basePath/容器化/CI），129 三修（0bd1f2a）仅涉 Dockerfile/release 脚本不入 npm 包。
 
 - **vite 配置内联合成**——`hmr` 配置新增 `react`/`base`/`entries` 三键：`react:true` 从使用方 cwd 自备加载 `@vitejs/plugin-react` 注入 Fast Refresh（同 vite 对等件契约，缺席/越界 fail loud），base 缺省 `'/app/'`，依赖预热入口缺省按 `src/client/index.tsx|.ts` 约定探测——**简单使用方零 vite.config 直享 HMR**；自带 vite.config.ts 的复杂使用方（别名族）不设 `react` 自然合并（插件双开=重复注册禁）。
 - **框架装载器 `/__ling/boot.js`**（`/app/__ling/boot.js` dev 态同源应答）：子应用协议 `window.__ModuleLoader__.load({id, factory})` 缺省实现（宿主已有自持装载器不覆盖）+ `lingLoadSubapps(keys)` 运行时动态导入正路——宿主页引两行即得子应用源码面 HMR；固化两坑知识：勿用 `<script src="/packages/…">`（vite html 转换前缀 base→404）与静态 import（html-proxy 中间件态 500）。

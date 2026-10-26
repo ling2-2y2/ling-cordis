@@ -203,6 +203,11 @@ One `hmr` line plus one host-page line is the whole integration (terms: see Glos
   itself and synthesizes `base: '/app/'` plus dep prewarming); consumers with
   their own `vite.config.ts` leave `react: true` off (double plugin is
   forbidden).
+- **Site prefix single source**: `basePath: '/app'` (optional, this is the
+  default) — both `staticApp.urlPrefix` and the vite `base` derive from it when
+  not set explicitly (no more prefix written twice, drift silently 404ing
+  assets); explicit settings win; trailing slashes normalize (`'/foo/'` →
+  `'/foo'`).
 - **Host page side**: `index.html` references exactly one line,
   `<script src="/__ling/main.js"></script>` (subapp key order = the
   ling.config.mjs module list). Hosts with their own loader (e.g. the ling-web
@@ -267,9 +272,9 @@ What a standard consumer package of this framework looks like —
 [`examples/hmr-react`](./examples/hmr-react) and the reference consumer
 `ling-harness-runner` are **file-for-file identical**; the tree below is the
 spec. New consumers start from this shape; anything diverging from it is
-legacy to be reconciled (container-shape extras like `engines.json`,
-`Dockerfile*`, `entrypoint.sh` are domain additions, not framework
-requirements):
+legacy to be reconciled (`engines.json` / `entrypoint.sh` remain domain
+additions; the **Dockerfile trio now has a canonical template** — see
+Containerization below):
 
 ```
 <pkg root>/
@@ -282,6 +287,8 @@ requirements):
 │   └── client/
 │       ├── index.tsx      # subapp protocol exports export { inject, apply } — the /packages source-face convention entry
 │       └── DemoView.tsx  # pure React components and business source (separate from protocol exports = Fast Refresh keeps state)
+├── Dockerfile             # [container file, optional] canonical multi-stage template (build stage: full devDeps → runtime: artifacts + framework pkg only)
+├── compose.yaml           # [container file, optional] compose sample (HOST=0.0.0.0 env injection)
 ├── dist/                  # [artifact, not committed] shell static assets (vite build; product staticApp root)
 ├── client/
 │   └── client.js          # [artifact, not committed] subapp-protocol registrator (buildClientBundle; product /packages channel)
@@ -300,12 +307,46 @@ framework, not renameable; **yours** = content owned by your business):
 | `index.html` | host page: `#root` container + one classic script line for `/__ling/main.js`; **never** reference subapps directly or inline load logic | the only html, in the build graph |
 | `src/client/index.tsx` | subapp protocol exports `export { inject, apply }`; **never** mix in components (mixed modules hot-reload via remount, state lost) | convention entry |
 | `src/client/*.tsx` | pure components and business source — the substance that hot-reloads with state | yours |
+| `Dockerfile`/`compose.yaml`/`.dockerignore` | containerization trio (optional; canonical template ships with the example — see below) | copy the template, adapt freely |
 | `dist/`, `client/client.js` | the two build artifacts (shell/subapp) | artifacts, not committed |
 
 **Loading rule**: the host page's entire loading wiring is one line,
 `<script src="/__ling/main.js">`; the single source of the subapp key order is
 the ling.config.mjs module list's `client.key` (packagesExtras shared chunks
 are not auto-loaded).
+
+### Containerization (Docker)
+
+The canonical consumer image is
+[`examples/hmr-react/Dockerfile`](./examples/hmr-react/Dockerfile)
+(architecture review O4 + ruling batch 2026-10-26): **multi-stage** — the build
+stage installs full devDeps (vite/esbuild/plugin-react) and rewrites the three
+demo-form relative imports to the `@ling2/ling-cordis/dev` package export
+(byte-for-byte what a real consumer does); the runtime stage carries only the
+artifacts (`dist/` + `client/`) plus the pinned framework package
+(`pnpm install --prod`) — no vite, no esbuild, no tsx in the runtime image.
+Three container hooks come for free: the built-in `/healthz` route backs
+`HEALTHCHECK`, SIGTERM triggers the bounded shutdown (`docker stop` converges
+cleanly), and `HOST=0.0.0.0` is read by the `ling.config.mjs` thin shell (the
+framework's `/dev` surface reads no env itself).
+
+```bash
+cd examples/hmr-react
+docker build -t ling-cordis/hmr-react:latest .          # daily build (framework pkg = npm latest)
+docker build --build-arg LING_CORDIS_VERSION=2.3.0 \
+  -t ling-cordis/hmr-react:2.3.0 .                      # pinned build (for releases)
+docker run -d --name ling-hmr-react -p 8391:8391 \
+  -e HOST=0.0.0.0 ling-cordis/hmr-react:2.3.0            # run as non-root
+```
+
+Release pipeline (2026-10-26 ruling: local script orchestration, build &
+verification on the deploy host — no cloud publishing):
+`node scripts/release.mjs all` runs the whole chain — four gates → npm publish
+→ push both remotes → docker build on the deploy host (pinned to the new
+version) → recreate the container → three health assertions. Every node runs
+standalone (`gates`/`publish`/`push`/`remote`/`run`/`verify`); `--dry-run`
+guards the outward-facing steps. Credentials come from `.env`
+(`npmjs_access_token`, `DEPLOY_SSH_*`, … — gitignored).
 
 ## Modules
 
@@ -331,7 +372,7 @@ are not auto-loaded).
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest (99 cases)
+pnpm test        # vitest (109 cases)
 pnpm build       # tsdown (bundled JS) + tsc (per-module d.ts tree)
 pnpm check:dts   # compile the external-consumer type smoke against dist/
 pnpm smoke       # boot examples/hello end-to-end

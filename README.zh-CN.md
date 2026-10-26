@@ -190,6 +190,9 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 - **配置侧**：`hmr: { cwd: <vite 工程根>, react: true }`——简单使用方零
   vite.config（框架自备 `@vitejs/plugin-react`、合成 `base:'/app/'` 与依赖预热）；
   自带 `vite.config.ts` 的复杂使用方不设 `react:true`（插件双开禁）。
+- **站点前缀单源**：`basePath: '/app'`（可选，缺省即此值）——`staticApp.urlPrefix`
+  与 vite `base` 未显式设置时都由它派生（防两处各写一份、改一漏一=资产 404 无提示）；
+  显式设置保留、越具体越优先；尾斜杠容错（`'/foo/'` 归一 `'/foo'`）。
 - **宿主页侧**：`index.html` 只引一行 `<script src="/__ling/main.js"></script>`
   （子应用键序=ling.config.mjs 模块清单）。自持装载宿主（如 ling-web client-kernel）
   改用两行式：`<script src="/__ling/boot.js">` + 内联
@@ -238,8 +241,8 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 
 接入本框架的标准消费者包长什么样——[`examples/hmr-react`](./examples/hmr-react)
 与消费范本 `ling-harness-runner` **逐文件同构**，下树即规范：新接入包照此起形，
-与树不一致=要翻旧账（容器形态的 `engines.json`/`Dockerfile*`/`entrypoint.sh` 等
-是域增量件，不属框架结构必件）：
+与树不一致=要翻旧账（`engines.json`/`entrypoint.sh` 等仍是域增量件；**Dockerfile
+三件套已有正典模板**，见下节「容器化」）：
 
 ```
 <包根>/
@@ -252,6 +255,8 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 │   └── client/
 │       ├── index.tsx      # 子应用协议出口 export { inject, apply }——/packages 源码面约定入口
 │       └── DemoView.tsx  # 纯 React 组件与业务源码（与协议出口分文件 = Fast Refresh 保状态）
+├── Dockerfile             # 【容器件·可选】多阶段镜像正典模板（构建期全量 devDeps→运行期仅产物+框架包）
+├── compose.yaml           # 【容器件·可选】编排样例（HOST=0.0.0.0 环境注入）
 ├── dist/                  # 【产物·不入库】壳静态资产（vite build 产出；产物态 staticApp 服务根）
 ├── client/
 │   └── client.js          # 【产物·不入库】子应用协议注册器（buildClientBundle 产出；产物态 /packages 通道）
@@ -269,10 +274,36 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 | `index.html` | 宿主页：`#root` 容器+一行经典 script 引 `/__ling/main.js`；**勿**直引子应用或内联装载逻辑 | 唯一 html，入构建图 |
 | `src/client/index.tsx` | 子应用协议出口 `export { inject, apply }`；**禁**与组件混出（混出热更走重挂载丢状态） | 约定入口 |
 | `src/client/*.tsx` | 纯组件与业务源码——热更保状态的本体 | 你的 |
+| `Dockerfile`/`compose.yaml`/`.dockerignore` | 容器化三件套（可选；正典模板随示例，见下节） | 模板即抄，业务可改 |
 | `dist/`、`client/client.js` | 构建产物两件（壳/子应用） | 产物，不入库 |
 
 **装载规约**：宿主页装载接线只有一行 `<script src="/__ling/main.js">`；子应用键序
 唯一来源=ling.config.mjs 模块清单 `client.key`（packagesExtras 共享件不自动装载）。
+
+### 容器化（Docker）
+
+标准消费者镜像的正典=[`examples/hmr-react/Dockerfile`](./examples/hmr-react/Dockerfile)
+（2026-10-26 架构评审 O4 + 裁-2/裁-3 裁定形态）：**多阶段**——构建期装全量 devDeps
+（vite/esbuild/plugin-react）并把三处演示形态相对 import 重写为 `@ling2/ling-cordis/dev`
+包出口（与真实使用方一字不差）；运行期仅产物（`dist/`+`client/`）+钉版本框架包
+（`pnpm install --prod`），vite/esbuild/tsx 不进镜像。三件现成容器适配：`/healthz`
+内建路由配 `HEALTHCHECK`、SIGTERM 触发有界停机（`docker stop` 干净收敛）、`HOST=0.0.0.0`
+由 `ling.config.mjs` 薄壳读 env（框架 `/dev` 零 env 纪律不破）。
+
+```bash
+cd examples/hmr-react
+docker build -t ling-cordis/hmr-react:latest .          # 日常档（框架包= npm latest）
+docker build --build-arg LING_CORDIS_VERSION=2.3.0 \
+  -t ling-cordis/hmr-react:2.3.0 .                      # 钉版档（正式发布用）
+docker run -d --name ling-hmr-react -p 8391:8391 \
+  -e HOST=0.0.0.0 ling-cordis/hmr-react:2.3.0            # 起容器（非 root 运行）
+```
+
+发布流水线（裁-6：本地脚本编排、构建与验证在部署机完成，不走云端发布）：
+`node scripts/release.mjs all` 一发全串——门禁四连→发 npm→推双远端→部署机
+docker build（钉新版本）→重建容器→探活三断言；各节点可单步跑（`gates`/`publish`/
+`push`/`remote`/`run`/`verify`），`--dry-run` 保护外发动作。凭据读 `.env`
+（`npmjs_access_token`/`DEPLOY_SSH_*` 等，gitignored）。
 
 ## 模块
 
@@ -298,7 +329,7 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest（99 例）
+pnpm test        # vitest（109 例）
 pnpm build       # tsdown 打包 JS + tsc 直出 d.ts 模块树
 pnpm check:dts   # 以外部消费者视角编译 dist 类型冒烟
 pnpm smoke       # 端到端启动 examples/hello
