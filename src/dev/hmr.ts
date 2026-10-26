@@ -1,138 +1,104 @@
 /**
- * vite HMR 桥——dev 服务器进程内代管 vite dev 子进程：HTTP 管道反代 + WebSocket
- * 升级透传。机制自生产树排障链原样上收，四修内建：
- * ① `--host 127.0.0.1` 显式对齐（vite 默认听 ::1，反代 upstream 连不通）；
- * ② ws 握手头在桥内一次性构造（逐请求重拼=闭包错）；
- * ③ `\r\n` 经 `String.fromCharCode(13, 10)` 拼接（模板串裸换行在脚本层禁用）；
- * ④ 就绪探针 30s 有界（150×200ms），子进程死亡由 port 回落表达、不悬挂。
+ * vite 内嵌件（dev HMR 同进程同端口形态）——2026-10-26 用户裁定：①vite 必须与
+ * 载体同一个进程、同一个端口，不设独立 vite 端口（根除「端口被孤儿进程占用」
+ * 一类故障）；②dev 形态 vite 失场必须 fail loud 报错拒启，禁止静默回落 dist
+ * 构建产物误导排障（回落档仅保留给显式 LING_WEB_HMR=0 与产物态，归调用方组合）。
  *
- * 未激活语义：vite 入口缺席 / 子进程退出 / dispose → `port === 0`，
- * proxyHttp/proxyUpgrade 一律返回 false——回落策略（静态 dist、断开）归调用方。
- * vite 是使用方的对等件（cwd/node_modules 自备），本桥只 spawn 不依赖。
+ * 机制：从使用方 cwd 的 node_modules 以库形态加载 vite（createRequire 解析入口
+ * → 动态 import），`createServer({ server: { middlewareMode: true, hmr: { server } } })`
+ * ——页面处理器（connect 形态 middlewares）由调用方挂进载体 HTTP 面；HMR
+ * WebSocket 升级由 vite 自挂在传入的 httpServer 上、按 sec-websocket-protocol:
+ * vite-hmr 认领自家连接，与载体其他 ws 升级面（站内信等）互不干扰。
+ *
+ * vite 是使用方的对等件（cwd/node_modules 自备），本件只加载不依赖、零子进程。
  * @module @ling2/ling-cordis/dev/hmr
  */
-import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
-import { connect as netConnect } from 'node:net'
-import { join } from 'node:path'
-import type { Duplex } from 'node:stream'
+import { createRequire } from 'node:module'
+import { isAbsolute, join, relative } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 
-const CRLF = String.fromCharCode(13, 10)
-
-/** HMR 桥构造项。 */
-export interface ViteHmrOptions {
-  /** vite 项目目录（缺省 vite 入口 = <cwd>/node_modules/vite/bin/vite.js）。 */
+/** vite 内嵌件构造项。 */
+export interface ViteEmbedOptions {
+  /** vite 项目目录（vite.config.ts 与 node_modules 均在此解析）。 */
   cwd: string
-  /** vite 端口，缺省 5174；`--strictPort`（被占即子进程自败，不漂端口）。 */
-  port?: number
-  /** 反代目标主机，缺省 127.0.0.1（vite 默认听 ::1 的坑）。 */
-  host?: string
-  /** 自定义 vite 入口脚本（缺省按 cwd 推定；文件缺席=桥不激活，port 恒 0）。 */
-  viteBin?: string
-  /** 就绪探针路径，缺省 '/'（fetch 跟随重定向亦计就绪）。 */
-  readyPath?: string
+  /** 载体 http 服务实例——vite 的 HMR WebSocket 升级监听挂它上面（同端口）。 */
+  httpServer: Server
   /** 日志出口（缺省静默——库不刷屏）。 */
-  logger?: (level: 'info' | 'warn', message: string) => void
+  logger?: (level: 'info' | 'warn' | 'error', message: string) => void
 }
 
-/** 运行中的 HMR 桥（未激活态 port 恒 0，proxy* 返回 false）。 */
-export interface ViteHmrBridge {
-  /** 当前生效端口；0 = 未激活（入口缺席 / 子进程退出 / dispose）。 */
-  readonly port: number
-  /** 就绪探针（首轮探通或 30s 窗口耗尽即 resolve；从不 reject——死亡由 port 回落表达）。 */
-  readonly ready: Promise<void>
-  /** HTTP 反代（返回 true = 已接管应答；false = 未激活，调用方自行兜底）。 */
-  proxyHttp(req: IncomingMessage, res: ServerResponse, pathWithQuery: string): boolean
-  /** ws 升级透传（返回 true = 已接管 socket；false = 未激活，调用方处置）。 */
-  proxyUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): boolean
-  /** 停止子进程（幂等；port 归 0）。 */
-  dispose(): void
+/** 运行中的 vite 内嵌件。 */
+export interface ViteEmbed {
+  /** connect 形态页面处理器——next=未认领（调用方须显式报错，禁回落 dist）。 */
+  middlewares: (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void
+  /** 停机（vite server.close：关文件监听/模块图缓存/HMR 通道）。 */
+  dispose(): Promise<void>
 }
 
-/** 建桥：vite 入口在场即 spawn 子进程并启动就绪探针；缺席即静止回落态。 */
-export function createViteHmrBridge(options: ViteHmrOptions): ViteHmrBridge {
-  const host = options.host ?? '127.0.0.1'
-  const port = options.port ?? 5174
+/** vite createServer 入参的最小类型面（真形=vite 官方 InlineConfig，此处只钉本件消费的字段）。 */
+interface ViteCreateServerOptions {
+  root: string
+  server: { middlewareMode: true; hmr: { server: Server } }
+}
+
+/** vite dev server 的最小类型面（middlewares+close 两消费点）。 */
+interface ViteDevServerLike {
+  middlewares: ViteEmbed['middlewares']
+  close: () => Promise<void>
+}
+
+/** 路径包含判定：resolved 是否落在 base 目录之内（vitest/NODE_PATH 会把外部依赖
+ * 注入全局解析路径——无此守卫会加载到「别人的 vite」，破坏 fail loud 契约）。 */
+function isInside(base: string, resolved: string): boolean {
+  const rel = relative(base, resolved)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/** 建内嵌件：vite 缺席/初始化失败即 reject（fail loud）——绝不静默降级。 */
+export async function createViteEmbed(options: ViteEmbedOptions): Promise<ViteEmbed> {
   const log = options.logger ?? (() => {})
-  const viteBin = options.viteBin ?? join(options.cwd, 'node_modules', 'vite', 'bin', 'vite.js')
-
-  let active = 0
-  let child: ChildProcess | undefined
-  if (existsSync(viteBin)) {
-    active = port
-    child = spawn(process.execPath, [viteBin, '--port', String(port), '--strictPort', '--host', host], {
-      cwd: options.cwd, stdio: 'ignore', shell: false,
-    })
-    child.on('exit', () => {
-      active = 0
-      log('warn', 'vite 子进程退出——HTTP/ws 回落（port=0）')
-    })
-  } else {
-    log('warn', `vite 入口缺席（${viteBin}）——桥不激活，port 恒 0`)
-  }
-
-  // 就绪探针：30s 有界窗口；每拍前查活跃位，子进程已死即提前收束。
-  const ready = (async () => {
-    const probeUrl = `http://${host}:${port}${options.readyPath ?? '/'}`
-    for (let i = 0; i < 150; i += 1) {
-      if (active === 0) return
-      if (await fetch(probeUrl).then(() => true, () => false)) return
-      await new Promise((resolve) => setTimeout(resolve, 200))
+  const require = createRequire(join(options.cwd, 'package.json'))
+  let viteEntry: string
+  try {
+    const candidate = require.resolve('vite')
+    // 2026-10-26 用户裁定②：缺席（或解析到项目目录之外的外部 vite）=报错拒启，
+    // 禁静默回落 dist——内嵌件只认 cwd 自备的对等件
+    if (!isInside(options.cwd, candidate)) {
+      throw new Error(`foreign:${candidate}`)
     }
-  })()
-
-  function proxyHttp(req: IncomingMessage, res: ServerResponse, pathWithQuery: string): boolean {
-    if (active === 0) return false
-    const upstream = httpRequest({
-      host, port: active, method: req.method, path: pathWithQuery,
-      headers: { ...req.headers, host: `${host}:${active}` },
-    }, (viteRes) => {
-      res.writeHead(viteRes.statusCode ?? 502, viteRes.headers)
-      viteRes.pipe(res)
-    })
-    upstream.on('error', () => {
-      try {
-        res.writeHead(502, { 'content-type': 'text/plain' })
-        res.end('vite dev upstream unreachable')
-      } catch { /* 头已写则放弃 */ }
-    })
-    req.pipe(upstream)
-    return true
+    viteEntry = candidate
+  } catch (error) {
+    const hint = error instanceof Error && error.message.startsWith('foreign:')
+      ? `在 ${options.cwd} 之外解析到外部 vite（${error.message.slice('foreign:'.length)}）——只认项目自备依赖`
+      : `${options.cwd} 下解析不到 node_modules/vite`
+    throw new Error(
+      `vite 包缺席或越界（${hint}）——dev HMR 形态必须项目自备 vite 在场：` +
+        `先在该目录 pnpm install，或显式设 LING_WEB_HMR=0 走产物静态档`,
+    )
   }
-
-  function proxyUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): boolean {
-    if (active === 0) return false
-    const upstream = netConnect(active, host)
-    upstream.on('connect', () => {
-      // 原始握手重写：请求行+逐头拼裸报文（\r\n 拼接见模块头注③），head 帧先行补写
-      let rawHead = `${req.method} ${req.url} HTTP/1.1` + CRLF
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (value === undefined) continue
-        rawHead += `${key}: ${Array.isArray(value) ? value.join(', ') : value}` + CRLF
-      }
-      rawHead += CRLF
-      upstream.write(rawHead)
-      if (head.length > 0) upstream.write(head)
-      socket.pipe(upstream)
-      upstream.pipe(socket)
-    })
-    upstream.on('error', () => socket.destroy())
-    socket.on('error', () => upstream.destroy())
-    return true
+  let vite: { createServer: (inline: ViteCreateServerOptions) => Promise<ViteDevServerLike> }
+  try {
+    vite = await import(pathToFileURL(viteEntry).href) as typeof vite
+  } catch (error) {
+    throw new Error(`vite 库加载失败（${viteEntry}）：${error instanceof Error ? error.message : String(error)}`)
   }
-
-  let disposed = false
+  if (typeof vite.createServer !== 'function') {
+    throw new Error(`vite 入口形态异常（${viteEntry} 无 createServer 导出）——疑似安装不完整，请重装依赖`)
+  }
+  // middlewareMode=零监听零端口；hmr.server=热更 ws 挂载体自己的 http 服务（同进程同端口）
+  let viteServer: ViteDevServerLike
+  try {
+    viteServer = await vite.createServer({
+      root: options.cwd,
+      server: { middlewareMode: true, hmr: { server: options.httpServer } },
+    })
+  } catch (error) {
+    throw new Error(`vite dev server 初始化失败（cwd=${options.cwd}）：${error instanceof Error ? error.message : String(error)}`)
+  }
+  log('info', 'vite 内嵌就绪（同进程同端口：页面中间件+HMR ws 均走载体口，无独立 vite 端口）')
   return {
-    get port() { return active },
-    ready,
-    proxyHttp,
-    proxyUpgrade,
-    dispose() {
-      if (disposed) return
-      disposed = true
-      child?.kill()
-      active = 0
-    },
+    middlewares: viteServer.middlewares,
+    dispose: () => viteServer.close(),
   }
 }

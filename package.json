@@ -1,6 +1,6 @@
 {
   "name": "@ling2/ling-cordis",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Standalone cordis runtime: contexts, plugin fibers, event bus, services, timer, schema validation (schemastery), and console logging — plus a /dev toolkit (module registry, vite HMR bridge, build orchestration).",
   "type": "module",
   "license": "MIT",

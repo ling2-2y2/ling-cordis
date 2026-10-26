@@ -1,42 +1,37 @@
 /**
- * HMR 桥机制回归——spawn/就绪探针/HTTP 反代/ws 升级透传/缺席与退出回落/dispose 幂等。
- * 子进程用仓内 fake-vite 替身（见 ./fixtures/fake-vite.mjs）；组合方式照生产消费方
- * （壳 http 服务器先问桥、桥不认领走回落），认领优先序归壳、不归桥。
+ * vite 内嵌件回归（2026-10-26 用户裁定后的同进程同端口形态）——库加载/缺席
+ * fail loud/未认领 next 透传/dispose 关停。替身=tests/helpers/fake-vite.ts 铺的
+ * 假 vite 包（同进程 import+globalThis 台账，零子进程零端口）。/app 组合语义
+ * （500 hmr-unclaimed、LNG_WEB_HMR=0 静态档）见 dev-app.spec.ts。
  * @module @ling2/ling-cordis/tests/dev-hmr
  */
-import { createServer, request as httpRequest, type Server } from 'node:http'
+import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createViteHmrBridge, type ViteHmrBridge } from '../src/dev/index.ts'
+import { createViteEmbed, type ViteEmbed } from '../src/dev/index.ts'
+import { createFakeViteProject, fakeViteLedger, removeFakeViteProject, resetFakeViteLedger } from './helpers/fake-vite.ts'
 
-const viteBin = fileURLToPath(new URL('./fixtures/fake-vite.mjs', import.meta.url))
-const bridges: ViteHmrBridge[] = []
+const roots: string[] = []
 const shells: Server[] = []
+const embeds: ViteEmbed[] = []
 
 afterEach(async () => {
-  for (const bridge of bridges.splice(0)) bridge.dispose()
+  for (const embed of embeds.splice(0)) await embed.dispose()
   for (const server of shells.splice(0)) await new Promise((resolve) => server.close(resolve))
+  for (const root of roots.splice(0)) removeFakeViteProject(root)
+  resetFakeViteLedger()
 })
 
-/** 起壳服务器：HTTP/ws 都先交桥，桥不认领走 504/断开（照生产消费方组合方式）。 */
-function shellOf(bridge: ViteHmrBridge): Promise<number> {
+/** 起壳服务器：请求先交内嵌件，next（未认领）走 504 兜底（照生产消费方组合方式）。 */
+function shellOf(embed: ViteEmbed): Promise<number> {
   const server = createServer((req, res) => {
-    if (!bridge.proxyHttp(req, res, req.url ?? '/')) {
+    embed.middlewares(req, res, () => {
       res.statusCode = 504
-      res.end('fallback')
-    }
-  })
-  server.on('upgrade', (req, socket, head) => {
-    if (!bridge.proxyUpgrade(req, socket, head)) socket.destroy()
+      res.end('unclaimed')
+    })
   })
   shells.push(server)
-  return listenPort(server)
-}
-
-/** 监听 0 端口取内核分配值（测试体量下取值后释放的竞态可忽略）。 */
-function listenPort(server: Server): Promise<number> {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
@@ -45,92 +40,60 @@ function listenPort(server: Server): Promise<number> {
   })
 }
 
-async function freePort(): Promise<number> {
-  const probe = createServer()
-  const port = await listenPort(probe)
-  await new Promise((resolve) => probe.close(resolve))
-  return port
-}
-
-describe('createViteHmrBridge', () => {
-  it('就绪探针通后 HTTP 反代生效（host 头重写、管道透传回显路径）', async () => {
-    const vitePort = await freePort()
-    const bridge = createViteHmrBridge({ cwd: '.', viteBin, port: vitePort })
-    bridges.push(bridge)
-    expect(bridge.port).toBe(vitePort)
-    await bridge.ready
-    const shellPort = await shellOf(bridge)
-    const res = await fetch(`http://127.0.0.1:${shellPort}/app/?x=1`)
+describe('createViteEmbed', () => {
+  it('以库形态加载 cwd 的 vite：middleWares 应答 fake-vite，入场参带 root+middlewareMode+hmr.server', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    const embed = await createViteEmbed({ cwd, httpServer: shell })
+    embeds.push(embed)
+    expect(fakeViteLedger.created).toBe(1)
+    const options = fakeViteLedger.lastOptions as { root: string; server: { middlewareMode: boolean; hmr: { server: unknown } } }
+    expect(options.root).toBe(cwd)
+    expect(options.server.middlewareMode).toBe(true)
+    expect(options.server.hmr.server).toBe(shell)
+    const port = await shellOf(embed)
+    const res = await fetch(`http://127.0.0.1:${port}/app/src/main.tsx?x=1`)
     expect(res.status).toBe(200)
-    expect(await res.text()).toBe('fake-vite /app/?x=1')
+    expect(await res.text()).toBe('fake-vite /app/src/main.tsx?x=1')
   })
 
-  it('vite 入口缺席：port 恒 0、HTTP 不认领（回落归调用方）、warn 一条', async () => {
-    const logs: string[] = []
-    const bridge = createViteHmrBridge({
-      cwd: join(tmpdir(), 'ling-cordis-no-vite-here'),
-      logger: (level, message) => { if (level === 'warn') logs.push(message) },
-    })
-    bridges.push(bridge)
-    await bridge.ready
-    expect(bridge.port).toBe(0)
-    expect(logs.some((message) => message.includes('缺席'))).toBe(true)
-    const shellPort = await shellOf(bridge)
-    const res = await fetch(`http://127.0.0.1:${shellPort}/app/`)
+  it('未认领路径走 next()：由调用方兜底（组合在 app.ts=500 hmr-unclaimed，本用例钉透传契约本身）', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    const embed = await createViteEmbed({ cwd, httpServer: shell })
+    embeds.push(embed)
+    const port = await shellOf(embed)
+    const res = await fetch(`http://127.0.0.1:${port}/app/__next/deep`)
     expect(res.status).toBe(504)
+    expect(await res.text()).toBe('unclaimed')
   })
 
-  it('ws 升级透传：原始握手重写后假 vite 应答 101 并回写标记行', async () => {
-    const vitePort = await freePort()
-    const bridge = createViteHmrBridge({ cwd: '.', viteBin, port: vitePort })
-    bridges.push(bridge)
-    await bridge.ready
-    const shellPort = await shellOf(bridge)
-    const payload = await new Promise<string>((resolve, reject) => {
-      const req = httpRequest({
-        host: '127.0.0.1', port: shellPort, path: '/app/hmr',
-        headers: {
-          connection: 'Upgrade', upgrade: 'websocket',
-          'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', 'sec-websocket-version': '13',
-        },
-      })
-      req.on('upgrade', (res, socket, chunk) => {
-        expect(res.statusCode).toBe(101)
-        let data = chunk.toString()
-        if (data.includes('fake-vite-upgrade')) { socket.destroy(); resolve(data); return }
-        socket.on('data', (more) => {
-          data += more.toString()
-          if (data.includes('fake-vite-upgrade')) { socket.destroy(); resolve(data) }
-        })
-      })
-      req.on('error', reject)
-      req.end()
-    })
-    expect(payload).toContain('fake-vite-upgrade:/app/hmr')
+  it('vite 包缺席：reject（fail loud）且报错带修复指引——不静默回落', async () => {
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    // 空临时目录：node_modules/vite 必然缺席
+    const cwd = join(tmpdir(), `ling-cordis-absent-vite-${Date.now()}`)
+    roots.push(cwd)
+    const { mkdirSync } = await import('node:fs')
+    mkdirSync(cwd, { recursive: true })
+    await expect(createViteEmbed({ cwd, httpServer: shell })).rejects.toThrow(/vite 包缺席|pnpm install|LING_WEB_HMR=0/u)
   })
 
-  it('子进程死亡（__die 受控退出）：port 回落 0、认领随即停止', async () => {
-    const vitePort = await freePort()
-    const bridge = createViteHmrBridge({ cwd: '.', viteBin, port: vitePort })
-    bridges.push(bridge)
-    await bridge.ready
-    expect(bridge.port).toBe(vitePort)
-    await fetch(`http://127.0.0.1:${vitePort}/__die`)
-    const deadline = Date.now() + 3000
-    while (bridge.port !== 0 && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
-    expect(bridge.port).toBe(0)
-  })
-
-  it('dispose 幂等且即时回落 port=0', async () => {
-    const vitePort = await freePort()
-    const bridge = createViteHmrBridge({ cwd: '.', viteBin, port: vitePort })
-    bridges.push(bridge)
-    await bridge.ready
-    bridge.dispose()
-    bridge.dispose()
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    expect(bridge.port).toBe(0)
+  it('dispose：vite server.close 被调（台账 closed+1）', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    const embed = await createViteEmbed({ cwd, httpServer: shell })
+    await embed.dispose()
+    expect(fakeViteLedger.closed).toBe(1)
   })
 })

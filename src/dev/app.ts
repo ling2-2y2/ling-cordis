@@ -18,7 +18,7 @@ import { Context } from '../core/index.ts'
 import LoggerConsole from '../plugins/logger-console/index.ts'
 import Timer from '../plugins/timer.ts'
 import { ModuleRegistry, type ModuleEntry } from './registry.ts'
-import { createViteHmrBridge, type ViteHmrBridge } from './hmr.ts'
+import { createViteEmbed, type ViteEmbed } from './hmr.ts'
 
 /** 404 未命中去重表（方法+路径 → 次数；首见告警，进程级）。 */
 const missedRoutes = new Map<string, number>()
@@ -87,8 +87,8 @@ export interface DevAppConfig {
   stripApiPrefixes?: string[]
   /** 整路径重定向（如 '/' → '/app/'）。 */
   redirects?: Record<string, string>
-  /** vite HMR 桥（enabled 缺省 true；未配置=无 HMR；bin=自定义 vite 入口）。 */
-  hmr?: { cwd: string; enabled?: boolean; port?: number; host?: string; readyPath?: string; bin?: string }
+  /** vite 内嵌件（同进程同端口 HMR，2026-10-26 用户裁定：无独立 vite 端口；启用即必须就绪——缺席/初始化失败拒启）。未配置/显式关=走静态 dist 档。 */
+  hmr?: { cwd: string; enabled?: boolean }
   /** 静态 SPA 面（urlPrefix 缺省 '/app'；extras=前缀下额外文件映射）。 */
   staticApp?: {
     urlPrefix?: string
@@ -218,26 +218,12 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     if (face.healthz !== undefined) healthzBits.push(face.healthz)
   }
 
-  // HMR 桥（enabled 缺省 true；机制见 ./hmr.ts——认领顺序=挂件升级先、透传后）
-  let hmr: ViteHmrBridge | undefined
-  if (config.hmr !== undefined && config.hmr.enabled !== false) {
-    hmr = createViteHmrBridge({
-      cwd: config.hmr.cwd,
-      port: config.hmr.port,
-      host: config.hmr.host,
-      readyPath: config.hmr.readyPath,
-      viteBin: config.hmr.bin,
-      logger: (level, message) => console[level](`[${label}] ${message}`),
-    })
-    if (hmr.port !== 0) {
-      await hmr.ready
-      console.log(`[${label}] vite HMR 就绪（:${hmr.port}，反代+ws 透传）`)
-    }
-  }
-
   const staticConf = config.staticApp
   const urlPrefix = staticConf?.urlPrefix ?? '/app'
   const packagesTable: Record<string, string> = { ...registry.clientTable(config.rootDir), ...config.packagesExtras }
+
+  // vite 内嵌件占位（同进程同端口；创建时序=端口卫兵之后、listen 之前——见下）
+  let viteEmbed: ViteEmbed | undefined
 
   async function handleInner(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // API 前缀剥离（仅 API 生效；静态路径原样——SPA 深链）
@@ -271,20 +257,28 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     if (req.method === 'GET' && pathname === '/healthz') {
       const extra: Record<string, unknown> = {}
       for (const bit of healthzBits) Object.assign(extra, bit())
+      if (viteEmbed !== undefined) extra.hmr = 'vite-embedded'
       return sendJson(res, 200, { ok: true, runtime: label, ...extra })
     }
     if (req.method === 'GET' && pathname === '/boot-status') {
       return sendJson(res, 200, { phase: 'ready', elapsedMs: Math.max(0, Date.now() - bootStartedAt) })
     }
 
-    // 静态 SPA 面（HMR 激活=反代；回落=dist 静态+SPA 兜底）
-    if (req.method === 'GET' && (pathname === urlPrefix || pathname === `${urlPrefix}/`)) {
-      if (hmr?.proxyHttp(req, res, `${urlPrefix}/`) === true) return
-      if (staticConf !== undefined) return serveStaticFile(join(staticConf.root, 'index.html'), res, notFound)
-      return notFound()
-    }
-    if (req.method === 'GET' && pathname.startsWith(`${urlPrefix}/`)) {
-      if (hmr?.proxyHttp(req, res, req.url ?? pathname) === true) return
+    // /app 面：vite 内嵌态=全权交 vite（未认领=显式 500，禁回落 dist——2026-10-26
+    // 用户裁定②「我需要知道有错误而不是回落 dist」）；无内嵌件（hmr 未配置/显式
+    // 关）才走 dist 静态+SPA 兜底
+    if (req.method === 'GET' && (pathname === urlPrefix || pathname.startsWith(`${urlPrefix}/`))) {
+      if (viteEmbed !== undefined) {
+        viteEmbed.middlewares(req, res, () => sendJson(res, 500, {
+          ok: false,
+          error: { code: 'gateway/hmr-unclaimed', message: `vite 未认领 ${req.method} ${pathname}（dev HMR 形态无 dist 回落——排障见控制台日志）` },
+        }))
+        return
+      }
+      if (pathname === urlPrefix || pathname === `${urlPrefix}/`) {
+        if (staticConf !== undefined) return serveStaticFile(join(staticConf.root, 'index.html'), res, notFound)
+        return notFound()
+      }
       if (staticConf !== undefined) {
         const rel = pathname.slice(`${urlPrefix}/`.length)
         const extra = staticConf.extras?.[rel]
@@ -317,13 +311,25 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     for (const upgrader of upgraders) {
       if (upgrader(req, socket, head)) return
     }
-    if (hmr?.proxyUpgrade(req, socket, head) === true) return
     socket.destroy()
   })
+  // 注：vite 内嵌态的 HMR ws 升级由 vite 自挂在 server 上的监听器按
+  // sec-websocket-protocol: vite-hmr 认领，与上面挂件升级面并存互不干扰。
 
   // 端口卫兵：healthz 已有应答=旧实例在跑，fail loud
   if (await fetch(`http://${host}:${port}/healthz`).then(() => true, () => false)) {
     throw new Error(`[${label}] 端口 ${port} 已有 healthz 应答（旧实例在跑）——先停旧实例再起`)
+  }
+  // vite 内嵌件（2026-10-26 用户裁定①②）：启用即必须就绪——缺席/初始化失败
+  // =createViteEmbed reject→载体拒启（fail loud，禁静默回落 dist）；时序=端口
+  // 卫兵之后（省掉白启 vite）、listen 之前（healthz 自检时内嵌位已可观测）
+  if (config.hmr !== undefined && config.hmr.enabled !== false) {
+    viteEmbed = await createViteEmbed({
+      cwd: config.hmr.cwd,
+      httpServer: server,
+      logger: (level, message) => console[level](`[${label}] ${message}`),
+    })
+    console.log(`[${label}] vite HMR 内嵌就绪（同进程同端口 /app，无独立 vite 端口）`)
   }
   await new Promise<void>((resolveListen) => { server.listen(port, host, () => resolveListen()) })
   const health = await fetch(`http://${host}:${port}/healthz`).then(
@@ -340,7 +346,7 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   async function disposeAll(): Promise<void> {
     for (const disposer of faceDisposers) await disposer()
     if (setupDisposer !== undefined && typeof setupDisposer === 'function') setupDisposer()
-    hmr?.dispose()
+    await viteEmbed?.dispose()
     await new Promise<void>((resolveClose) => { server.close(() => resolveClose()) })
     await ctx.fiber.dispose()
   }
