@@ -87,8 +87,9 @@ export interface DevAppConfig {
   stripApiPrefixes?: string[]
   /** 整路径重定向（如 '/' → '/app/'）。 */
   redirects?: Record<string, string>
-  /** vite 内嵌件（同进程同端口 HMR，2026-10-26 用户裁定：无独立 vite 端口；启用即必须就绪——缺席/初始化失败拒启）。未配置/显式关=走静态 dist 档。 */
-  hmr?: { cwd: string; enabled?: boolean }
+  /** vite 内嵌件（同进程同端口 HMR，2026-10-26 用户裁定：无独立 vite 端口；启用即必须就绪——缺席/初始化失败拒启）。未配置/显式关=走静态 dist 档。
+   * base/react/entries 透传内嵌件（react:true=从 cwd 自备 @vitejs/plugin-react 注入——简单使用方零 vite.config；缺省依赖预热探测同 hmr.ts）。 */
+  hmr?: { cwd: string; enabled?: boolean; base?: string; react?: boolean; entries?: string[] }
   /** 静态 SPA 面（urlPrefix 缺省 '/app'；extras=前缀下额外文件映射）。 */
   staticApp?: {
     urlPrefix?: string
@@ -133,6 +134,45 @@ export function registryOf(config: Pick<DevAppConfig, 'phases' | 'modules'>): Mo
 }
 
 const DEFAULT_ASSET_EXT = /^[\w.-]+\.(js|mjs|css|map|png|jpg|jpeg|svg|woff2?|ttf|ico|json|wasm)$/u
+
+/**
+ * 框架装载器（宿主页引导件，2026-10-26 用户令「坑知识进框架」）——宿主页引两行即得
+ * 面板源码面 HMR：`<script src="/__ling/boot.js"></script><script>lingLoadPanels(['键'])</script>`。
+ * 固化的坑知识（ling-harness-runner 最小集合真机实证）：
+ * ①宿主页引面板勿用 `<script src="/packages/…">` 或静态 `import`——dev 态 vite html
+ *   转换会给根相对 URL 前缀 base（/app/packages/*→404），内联 module 会被抽成
+ *   html-proxy 而中间件态不被 vite 认领（500）——正路=运行时动态 import（本件内置）。
+ * ②面板协议装载面=window.__ModuleLoader__.load({id, factory})——宿主已有自持装载器
+ *   （如 ling-web client-kernel）则不覆盖，仅补缺省实现。
+ */
+const LING_BOOT_JS = [
+  ';(() => {',
+  "  if (typeof window === 'undefined') return",
+  '  function showError(error) {',
+  "    console.error('[ling-cordis] 面板装载失败', error)",
+  "    const box = document.getElementById('root')",
+  '    if (box) {',
+  '      const pre = document.createElement(\'pre\')',
+  "      pre.style.cssText = 'color:#b91c1c;white-space:pre-wrap;margin:24px;font:13px/1.6 monospace'",
+  "      pre.textContent = '面板装载失败：' + String((error && (error.stack || error.message)) || error)",
+  '      box.replaceChildren(pre)',
+  '    }',
+  '  }',
+  '  if (window.__ModuleLoader__ === undefined) {',
+  '    window.__ModuleLoader__ = {',
+  '      load(entry) {',
+  '        try {',
+  '          const exports = entry.factory()',
+  '          void Promise.resolve(exports.apply(window.__lingHostCtx ?? {})).catch(showError)',
+  '        } catch (error) { showError(error) }',
+  '      },',
+  '    }',
+  '  }',
+  "  const rawImport = new Function('url', 'return import(url)')",
+  "  window.lingLoadPanels = (keys) => Promise.all(keys.map((key) => rawImport('/packages/' + key).catch(showError)))",
+  '})()',
+  '',
+].join('\n')
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
@@ -273,10 +313,47 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
       return sendJson(res, 200, { phase: 'ready', elapsedMs: Math.max(0, Date.now() - bootStartedAt) })
     }
 
+    // 框架装载器通道（两种形态恒在）：宿主页 <script src="/__ling/boot.js">——dev 态
+    // vite html 转换会给根相对 src 前缀 base（/app/__ling/boot.js），两路由同源应答
+    if (req.method === 'GET' && (pathname === '/__ling/boot.js' || pathname === `${urlPrefix}/__ling/boot.js`)) {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(LING_BOOT_JS)
+      return
+    }
+
+    /** /packages 面单点（源码面→产物通道；正路与 /app/packages/* 别名共用）。 */
+    function servePackagesFace(key: string): void {
+      // 客户端源码面（2026-10-26 用户裁定①②）：dev 态（vite 内嵌在场）且该键有
+      // 源码入口 → 改发 ESM 转接 shim——浏览器经 vite /app/@fs/ 直拉包源码入口
+      // （TSX 转译+Fast Refresh+单 React=vite 图天然保证），宿主装载器吃到的
+      // ESM 命名空间与产物 CJS exports 同形（inject/apply）。产物态/无源码面键
+      // （含纯资产 extras）=原样产物文件通道。
+      const source = viteEmbed !== undefined ? clientSourceTable[key] : undefined
+      if (source !== undefined) {
+        const fsUrl = `/app/@fs/${source.entry.replaceAll('\\', '/')}`
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(
+          `import * as mod from ${JSON.stringify(fsUrl)}\n` +
+          `${CLIENT_LOADER_GLOBAL}.load({ id: ${JSON.stringify(source.id)}, factory: () => mod })\n`,
+        )
+        return
+      }
+      const file = packagesTable[key]
+      if (file === undefined) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `包面文件未登记: /packages/${key}` } })
+      return serveStaticFile(file, res, notFound)
+    }
+
     // /app 面：vite 内嵌态=全权交 vite（未认领=显式 500，禁回落 dist——2026-10-26
     // 用户裁定②「我需要知道有错误而不是回落 dist」）；无内嵌件（hmr 未配置/显式
     // 关）才走 dist 静态+SPA 兜底
     if (req.method === 'GET' && (pathname === urlPrefix || pathname.startsWith(`${urlPrefix}/`))) {
+      // /app/packages/* 别名（dev 态坑吸收）：宿主页里根相对 <script src="/packages/…">
+      // 被 vite html 转换前缀 base 后的形态——别名回 /packages 面（正路仍推荐
+      // /__ling/boot.js 运行时装载，本别名兜底易踩形态）
+      if (viteEmbed !== undefined && pathname.startsWith(`${urlPrefix}/packages/`)) {
+        servePackagesFace(decodeURIComponent(pathname.slice(`${urlPrefix}/packages/`.length)))
+        return
+      }
       if (viteEmbed !== undefined) {
         viteEmbed.middlewares(req, res, () => sendJson(res, 500, {
           ok: false,
@@ -301,25 +378,8 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
       return notFound()
     }
     if (req.method === 'GET' && pathname.startsWith('/packages/')) {
-      const key = decodeURIComponent(pathname.slice('/packages/'.length))
-      // 客户端源码面（2026-10-26 用户裁定①②）：dev 态（vite 内嵌在场）且该键有
-      // 源码入口 → 改发 ESM 转接 shim——浏览器经 vite /app/@fs/ 直拉包源码入口
-      // （TSX 转译+Fast Refresh+单 React=vite 图天然保证），宿主装载器吃到的
-      // ESM 命名空间与产物 CJS exports 同形（inject/apply）。产物态/无源码面键
-      // （含纯资产 extras）=原样产物文件通道。
-      const source = viteEmbed !== undefined ? clientSourceTable[key] : undefined
-      if (source !== undefined) {
-        const fsUrl = `/app/@fs/${source.entry.replaceAll('\\', '/')}`
-        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
-        res.end(
-          `import * as mod from ${JSON.stringify(fsUrl)}\n` +
-          `${CLIENT_LOADER_GLOBAL}.load({ id: ${JSON.stringify(source.id)}, factory: () => mod })\n`,
-        )
-        return
-      }
-      const file = packagesTable[key]
-      if (file === undefined) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `包面文件未登记: ${pathname}` } })
-      return serveStaticFile(file, res, notFound)
+      servePackagesFace(decodeURIComponent(pathname.slice('/packages/'.length)))
+      return
     }
     return notFound()
   }
@@ -354,9 +414,12 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     viteEmbed = await createViteEmbed({
       cwd: config.hmr.cwd,
       httpServer: server,
+      base: config.hmr.base,
+      react: config.hmr.react,
+      entries: config.hmr.entries,
       logger: (level, message) => console[level](`[${label}] ${message}`),
     })
-    console.log(`[${label}] vite HMR 内嵌就绪（同进程同端口 /app，无独立 vite 端口）`)
+    console.log(`[${label}] vite HMR 内嵌就绪（同进程单端口 /app，无独立 vite 端口）`)
   }
   await new Promise<void>((resolveListen) => { server.listen(port, host, () => resolveListen()) })
   const health = await fetch(`http://${host}:${port}/healthz`).then(

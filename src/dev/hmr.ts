@@ -11,19 +11,34 @@
  * vite-hmr 认领自家连接，与载体其他 ws 升级面（站内信等）互不干扰。
  *
  * vite 是使用方的对等件（cwd/node_modules 自备），本件只加载不依赖、零子进程。
+ * 配置合成（2026-10-26 用户令「坑知识进框架」）：base 缺省 '/app/'、react:true 时
+ * 注入 @vitejs/plugin-react、依赖预热入口约定探测——简单使用方零 vite.config 直享
+ * React Fast Refresh HMR（ling-harness-runner 演示页为消费范本）。
  * @module @ling2/ling-cordis/dev/hmr
  */
 import { createRequire } from 'node:module'
+import { existsSync } from 'node:fs'
 import { isAbsolute, join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 
 /** vite 内嵌件构造项。 */
 export interface ViteEmbedOptions {
-  /** vite 项目目录（vite.config.ts 与 node_modules 均在此解析）。 */
+  /** vite 项目目录（vite 与可选的 react 插件均在 cwd/node_modules 自备解析）。 */
   cwd: string
   /** 载体 http 服务实例——vite 的 HMR WebSocket 升级监听挂它上面（同端口）。 */
   httpServer: Server
+  /** 站点 base（缺省 '/app/'——载体 /app 面约定）；热更 ws 认领路径按它判定。 */
+  base?: string
+  /** React Fast Refresh 自备档：true=从 cwd 加载 @vitejs/plugin-react 注入插件——
+   *  简单使用方零 vite.config 直享 HMR（内联 base+插件+依赖预热全合成）；自带
+   *  vite.config.ts 的复杂使用方（ling-web 别名族）勿设（文件配置自然合并，
+   *  插件双开会重复注册）。插件与 vite 同款对等件契约：缺席/越界 fail loud。 */
+  react?: boolean
+  /** 依赖预热入口（vite optimizeDeps.entries）；缺省按约定探测
+   *  <cwd>/src/client/index.tsx → .ts。不预热时浏览器首访才发现 react 族裸依赖
+   *  →优化器冷启动竞态 → 首开卡「装载中」（实证）。 */
+  entries?: string[]
   /** 日志出口（缺省静默——库不刷屏）。 */
   logger?: (level: 'info' | 'warn' | 'error', message: string) => void
 }
@@ -31,6 +46,9 @@ export interface ViteEmbedOptions {
 /** vite createServer 入参的最小类型面（真形=vite 官方 InlineConfig，此处只钉本件消费的字段）。 */
 interface ViteCreateServerOptions {
   root: string
+  base?: string
+  plugins?: unknown[]
+  optimizeDeps?: { entries: string[] }
   server: { middlewareMode: true; hmr: { server: Server } }
 }
 
@@ -59,6 +77,36 @@ export interface ViteEmbed {
 function isInside(base: string, resolved: string): boolean {
   const rel = relative(base, resolved)
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/** 依赖预热入口探测约定（与 registry.ts 的 CLIENT_ENTRY_CONVENTIONS 同序——
+ *  约定入口存在即预热，首开免优化器冷启动竞态）。 */
+const ENTRY_CONVENTIONS = ['src/client/index.tsx', 'src/client/index.ts']
+
+/** 从 cwd 自备对等件加载 @vitejs/plugin-react 工厂（缺席/越界 fail loud——同 vite 契约）。 */
+async function loadReactPluginFactory(cwd: string): Promise<() => unknown> {
+  const require = createRequire(join(cwd, 'package.json'))
+  let entry: string
+  try {
+    const candidate = require.resolve('@vitejs/plugin-react')
+    if (!isInside(cwd, candidate)) throw new Error(`foreign:${candidate}`)
+    entry = candidate
+  } catch (error) {
+    const hint = error instanceof Error && error.message.startsWith('foreign:')
+      ? `在 ${cwd} 之外解析到外部插件（${error.message.slice('foreign:'.length)}）——只认项目自备依赖`
+      : `${cwd} 下解析不到 node_modules/@vitejs/plugin-react`
+    throw new Error(
+      `@vitejs/plugin-react 包缺席或越界（${hint}）——hmr.react=true 须项目自备该插件（与 vite 同款对等件契约）`,
+    )
+  }
+  try {
+    const mod = await import(pathToFileURL(entry).href) as { default?: unknown }
+    const factory = mod.default ?? mod
+    if (typeof factory !== 'function') throw new Error('no-factory')
+    return factory as () => unknown
+  } catch (error) {
+    throw new Error(`@vitejs/plugin-react 加载失败（${entry}）：${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 /** 建内嵌件：vite 缺席/初始化失败即 reject（fail loud）——绝不静默降级。 */
@@ -92,13 +140,22 @@ export async function createViteEmbed(options: ViteEmbedOptions): Promise<ViteEm
   if (typeof vite.createServer !== 'function') {
     throw new Error(`vite 入口形态异常（${viteEntry} 无 createServer 导出）——疑似安装不完整，请重装依赖`)
   }
+  // React Fast Refresh 自备档（react:true）：从 cwd 加载插件并注入——简单使用方
+  // 零 vite.config 直享 HMR；复杂使用方不设（文件配置自然合并）
+  const reactPluginFactory = options.react === true ? await loadReactPluginFactory(options.cwd) : undefined
+  // 依赖预热入口：显式优先，缺省按约定探测（见 ENTRY_CONVENTIONS 注释）
+  const entries = options.entries ?? ENTRY_CONVENTIONS.filter((entry) => existsSync(join(options.cwd, entry)))
   // middlewareMode=零监听零端口；hmr.server=热更 ws 挂载体自己的 http 服务（同进程同端口）
+  const inline: ViteCreateServerOptions = {
+    root: options.cwd,
+    base: options.base ?? '/app/',
+    ...(reactPluginFactory !== undefined ? { plugins: [reactPluginFactory()] } : {}),
+    ...(entries.length > 0 ? { optimizeDeps: { entries } } : {}),
+    server: { middlewareMode: true, hmr: { server: options.httpServer } },
+  }
   let viteServer: ViteDevServerLike
   try {
-    viteServer = await vite.createServer({
-      root: options.cwd,
-      server: { middlewareMode: true, hmr: { server: options.httpServer } },
-    })
+    viteServer = await vite.createServer(inline)
   } catch (error) {
     throw new Error(`vite dev server 初始化失败（cwd=${options.cwd}）：${error instanceof Error ? error.message : String(error)}`)
   }

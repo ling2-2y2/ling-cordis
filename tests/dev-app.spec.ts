@@ -269,6 +269,67 @@ describe('runDevApp', () => {
     })).rejects.toThrow(/vite 包缺席|LING_WEB_HMR=0/u)
   })
 
+  it('框架装载器路由：/__ling/boot.js 与 /app/__ling/boot.js 同源应答（内容=装载面+运行时装载正路）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    roots.push(root)
+    const port = await freePort()
+    const app = await runDevApp({ rootDir: root, port, phases: ['only'], modules: [] })
+    apps.push(app)
+    const base = `http://127.0.0.1:${port}`
+    const plain = await fetch(`${base}/__ling/boot.js`)
+    const prefixed = await fetch(`${base}/app/__ling/boot.js`)
+    expect(plain.status).toBe(200)
+    expect(prefixed.status).toBe(200)
+    expect(plain.headers.get('content-type')).toContain('text/javascript')
+    const body = await plain.text()
+    expect(body).toContain('__ModuleLoader__')
+    expect(body).toContain('lingLoadPanels')
+    // 同源：两路由字节一致
+    expect(await prefixed.text()).toBe(body)
+    await app.dispose()
+  })
+
+  it('/app/packages/* 别名（dev 态坑吸收）：base 前缀形态回源码面 shim；产物态不别名（404 不误吞）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    roots.push(root)
+    const pkg = join(root, 'fake-pkg')
+    mkdirSync(join(pkg, 'src', 'client'), { recursive: true })
+    writeFileSync(join(pkg, 'src', 'client', 'index.ts'), 'export const inject = []\n')
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const port = await freePort()
+    const app = await runDevApp({
+      rootDir: root,
+      port,
+      phases: ['only'],
+      modules: [{ id: 'fake-pkg', phase: 'only', client: { key: 'fake-pkg/client.js' } }],
+      hmr: { cwd },
+    })
+    apps.push(app)
+    // dev 态：/app/packages/*（vite html 转换前缀 base 后的形态）→ 与 /packages/* 同源码面
+    const aliased = await fetch(`http://127.0.0.1:${port}/app/packages/fake-pkg/client.js`)
+    expect(aliased.status).toBe(200)
+    const body = await aliased.text()
+    expect(body).toContain('/app/@fs/')
+    expect(body).toContain('window.__ModuleLoader__.load')
+    await app.dispose()
+    // 产物态（无 vite 内嵌）：/app/packages/* 走静态面（文件不存在=404，别名不吞）
+    const staticRoot = join(root, 'web')
+    mkdirSync(staticRoot)
+    writeFileSync(join(staticRoot, 'index.html'), '<html>spa-index</html>')
+    const port2 = await freePort()
+    const app2 = await runDevApp({
+      rootDir: root,
+      port: port2,
+      phases: ['only'],
+      modules: [{ id: 'fake-pkg', phase: 'only', client: { key: 'fake-pkg/client.js' } }],
+      staticApp: { root: staticRoot },
+    })
+    apps.push(app2)
+    expect((await fetch(`http://127.0.0.1:${port2}/app/packages/fake-pkg/client.js`)).status).toBe(404)
+    await app2.dispose()
+  })
+
   it('hmr 显式关（enabled:false）：/app 走 dist 静态档（逃生口保留）', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
     roots.push(root)

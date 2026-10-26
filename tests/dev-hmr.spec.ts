@@ -113,4 +113,35 @@ describe('createViteEmbed', () => {
     await embed.dispose()
     expect(fakeViteLedger.closed).toBe(1)
   })
+
+  it('react:true 配置合成：内联 base+plugin-react 注入+约定入口依赖预热（简单使用方零 vite.config）', async () => {
+    const cwd = createFakeViteProject({ react: true, clientEntry: true })
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    const embed = await createViteEmbed({ cwd, httpServer: shell, react: true })
+    embeds.push(embed)
+    const options = fakeViteLedger.lastOptions as {
+      base?: string
+      plugins?: { name?: string }[]
+      optimizeDeps?: { entries: string[] }
+    }
+    expect(options.base).toBe('/app/')
+    expect(options.plugins?.map((plugin) => plugin.name)).toEqual(['fake-plugin-react'])
+    expect(fakeViteLedger.pluginCalled).toBe(1)
+    expect(options.optimizeDeps?.entries).toEqual(['src/client/index.tsx'])
+    await embed.dispose()
+  })
+
+  it('react:true 但 @vitejs/plugin-react 缺席：reject（fail loud，同 vite 对等件契约）', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    await expect(createViteEmbed({ cwd, httpServer: shell, react: true })).rejects.toThrow(
+      /@vitejs\/plugin-react 包缺席或越界/u,
+    )
+  })
 })
