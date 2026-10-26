@@ -2,8 +2,9 @@
  * 载体内核 runDevApp——把一份声明式配置（vite.config.ts 同款薄形态）跑成
  * dev 服务器：env 装配 → Context+LoggerConsole+Timer → setup 钩子 → 三相模块
  * 循环（spec 动态 import → ctx.plugin → after 钩子）→ HTTP 面（配置挂件先行，
- * 框架内建 healthz/boot-status/静态 SPA//packages 表/HMR 组合殿后）→ 端口卫兵
- * → onReady → 有界停机。
+ * 框架内建路由殿后——2026-10-26 架构评审 O1 起内建路由自消费 ../webserver
+ * WebServerRouter：exact→最长 prefix→404 fallback，机制与路由器包单源）→ 端口
+ * 卫兵 → onReady → 有界停机。
  *
  * env 纪律：本内核不读任何环境变量——开关/端口/路径全部由配置传值；配置文件
  * 求值序契约=薄壳先 loadEnv('.env') 再动态 import 配置（配置体求值时 env 已在场，
@@ -19,6 +20,7 @@ import LoggerConsole from '../plugins/logger-console/index.ts'
 import Timer from '../plugins/timer.ts'
 import { ModuleRegistry, type ModuleEntry } from './registry.ts'
 import { createViteEmbed, type ViteEmbed } from './hmr.ts'
+import { WebServerRouter, type WebServerHandler } from '../webserver/index.ts'
 
 /** 404 未命中去重表（方法+路径 → 次数；首见告警，进程级）。 */
 const missedRoutes = new Map<string, number>()
@@ -303,6 +305,125 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   // vite 内嵌件占位（同进程同端口；创建时序=端口卫兵之后、listen 之前——见下）
   let viteEmbed: ViteEmbed | undefined
 
+  // ── 内建路由自消费 WebServerRouter（2026-10-26 架构评审 O1：同仓两套路由机制
+  // 合一——dev 内核不再手写 if 链，webserver 路由器自此被真实消费/回归。行为语义
+  // 与迁移前 if 链逐条对拍（存量 spec+两示例 --check 为门）：exact（redirects/
+  // healthz/boot-status/__ling 双路由）→ 最长 prefix（/packages、urlPrefix 的 /app
+  // 面）→ fallback 唯一座（404 首见去重观测）。非 GET 的内建路由等价回落 404。───
+  const router = new WebServerRouter()
+
+  /** 404 未命中应答+观测（2026-10-16 上传 404 静默事故立法）：同 miss 只告警首见
+   * （防资产类重复刷屏），重复计数进 missedRoutes（进程级）。 */
+  const notFound = (req: IncomingMessage, res: ServerResponse): void => {
+    const key = `${req.method} ${new URL(req.url ?? '/', 'http://localhost').pathname}`
+    const hits = (missedRoutes.get(key) ?? 0) + 1
+    missedRoutes.set(key, hits)
+    if (hits === 1) console.warn(`[${label}] 路由未命中(404)：${key}`)
+    sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `not found: ${key}` } })
+  }
+
+  /** GET 化包装：内建路由全为 GET 语义（迁移前 if 链同款）——非 GET 等价回落 404。 */
+  const getOnly = (handler: WebServerHandler): WebServerHandler => (req, res) => {
+    if (req.method !== 'GET') return notFound(req, res)
+    handler(req, res)
+  }
+
+  /** /packages 面单点（源码面→产物通道；正路与 /app/packages/* 别名共用）。 */
+  const servePackagesFace = (req: IncomingMessage, res: ServerResponse, key: string): void => {
+    // 客户端源码面（2026-10-26 用户裁定①②）：dev 态（vite 内嵌在场）且该键有
+    // 源码入口 → 改发 ESM 转接 shim——浏览器经 vite /app/@fs/ 直拉包源码入口
+    // （TSX 转译+Fast Refresh+单 React=vite 图天然保证），宿主装载器吃到的
+    // ESM 命名空间与产物 CJS exports 同形（inject/apply）。产物态/无源码面键
+    // （含纯资产 extras）=原样产物文件通道。
+    const source = viteEmbed !== undefined ? clientSourceTable[key] : undefined
+    if (source !== undefined) {
+      const fsUrl = `/app/@fs/${source.entry.replaceAll('\\', '/')}`
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(
+        `import * as mod from ${JSON.stringify(fsUrl)}\n` +
+        `${CLIENT_LOADER_GLOBAL}.load({ id: ${JSON.stringify(source.id)}, factory: () => mod })\n`,
+      )
+      return
+    }
+    const file = packagesTable[key]
+    if (file === undefined) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `包面文件未登记: /packages/${key}` } })
+    return serveStaticFile(file, res, () => notFound(req, res))
+  }
+
+  /** /packages 前缀处理器：剥前缀取键（URL 解码）交面单点。 */
+  const packagesFace: WebServerHandler = (req, res) => {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
+    servePackagesFace(req, res, decodeURIComponent(pathname.slice('/packages/'.length)))
+  }
+
+  /** /app 面处理器：vite 内嵌态=全权交 vite（未认领=显式 500，禁回落 dist——
+   * 2026-10-26 用户裁定②「我需要知道有错误而不是回落 dist」）；无内嵌件（hmr
+   * 未配置/显式关）才走 dist 静态+SPA 兜底。含 /app/packages/* 别名（dev 态坑
+   * 吸收：宿主页根相对 script 被 vite html 转换前缀 base 后的形态——别名回
+   * /packages 面，正路仍推荐 /__ling/boot.js 运行时装载）。 */
+  const appFace: WebServerHandler = (req, res) => {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
+    if (viteEmbed !== undefined && pathname.startsWith(`${urlPrefix}/packages/`)) {
+      servePackagesFace(req, res, decodeURIComponent(pathname.slice(`${urlPrefix}/packages/`.length)))
+      return
+    }
+    if (viteEmbed !== undefined) {
+      viteEmbed.middlewares(req, res, () => sendJson(res, 500, {
+        ok: false,
+        error: { code: 'gateway/hmr-unclaimed', message: `vite 未认领 ${req.method} ${pathname}（dev HMR 形态无 dist 回落——排障见控制台日志）` },
+      }))
+      return
+    }
+    if (pathname === urlPrefix || pathname === `${urlPrefix}/`) {
+      if (staticConf !== undefined) return serveStaticFile(join(staticConf.root, 'index.html'), res, () => notFound(req, res))
+      return notFound(req, res)
+    }
+    if (staticConf !== undefined) {
+      const rel = pathname.slice(`${urlPrefix}/`.length)
+      const extra = staticConf.extras?.[rel]
+      if (extra !== undefined) return serveStaticFile(extra, res, () => notFound(req, res))
+      const file = join(staticConf.root, rel)
+      if (!file.startsWith(staticConf.root)) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: '路径越界' } })
+      const assetExt = staticConf.assetExt ?? DEFAULT_ASSET_EXT
+      if (assetExt.test(rel.split('/').pop() ?? '')) return serveStaticFile(file, res, () => notFound(req, res))
+      return serveStaticFile(join(staticConf.root, 'index.html'), res, () => notFound(req, res))
+    }
+    return notFound(req, res)
+  }
+
+  for (const [path, location] of Object.entries(config.redirects ?? {})) {
+    router.register({ kind: 'exact', path, handler: getOnly((_req, res) => {
+      res.writeHead(302, { location })
+      res.end()
+    }) })
+  }
+  router.register({ kind: 'exact', path: '/healthz', handler: getOnly((_req, res) => {
+    const extra: Record<string, unknown> = {}
+    for (const bit of healthzBits) Object.assign(extra, bit())
+    if (viteEmbed !== undefined) extra.hmr = 'vite-embedded'
+    sendJson(res, 200, { ok: true, runtime: label, ...extra })
+  }) })
+  router.register({ kind: 'exact', path: '/boot-status', handler: getOnly((_req, res) => {
+    sendJson(res, 200, { phase: 'ready', elapsedMs: Math.max(0, Date.now() - bootStartedAt) })
+  }) })
+  // 框架装载器/自动装载双路由（根形态恒在+base 前缀形态；Set 防重注册——
+  // register 重复 (kind,path) 抛错）
+  for (const path of new Set(['/__ling/boot.js', `${urlPrefix}/__ling/boot.js`])) {
+    router.register({ kind: 'exact', path, handler: getOnly((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(LING_BOOT_JS)
+    }) })
+  }
+  for (const path of new Set(['/__ling/main.js', `${urlPrefix}/__ling/main.js`])) {
+    router.register({ kind: 'exact', path, handler: getOnly((_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(LING_MAIN_JS)
+    }) })
+  }
+  router.register({ kind: 'prefix', path: '/packages', handler: getOnly(packagesFace) })
+  router.register({ kind: 'prefix', path: urlPrefix, handler: getOnly(appFace) })
+  router.registerFallback(notFound)
+
   async function handleInner(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // API 前缀剥离（仅 API 生效；静态路径原样——SPA 深链）
     if (req.url !== undefined) {
@@ -310,116 +431,12 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
         if (req.url.startsWith(`${prefix}/api/`)) { req.url = req.url.slice(prefix.length); break }
       }
     }
+    // 挂件先行（消费方 http faces 优先于内建路由——迁移前语义钉死）
     for (const handler of handlers) {
       if (await handler(req, res)) return
     }
-    const url = new URL(req.url ?? '/', 'http://localhost')
-    const pathname = url.pathname
-    // 路由未命中观测（2026-10-16 上传 404 静默事故立法）：404 曾零日志——前端只
-    // 见兜底文案、后端控制台无线索，排障无从下手。同 miss 只告警首见（防资产类
-    // 重复刷屏），重复计数进 missedRoutes。
-    const notFound = () => {
-      const key = `${req.method} ${pathname}`
-      const hits = (missedRoutes.get(key) ?? 0) + 1
-      missedRoutes.set(key, hits)
-      if (hits === 1) console.warn(`[${label}] 路由未命中(404)：${key}`)
-      return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `not found: ${key}` } })
-    }
-
-    const redirect = config.redirects?.[pathname]
-    if (req.method === 'GET' && redirect !== undefined) {
-      res.writeHead(302, { location: redirect })
-      res.end()
-      return
-    }
-    if (req.method === 'GET' && pathname === '/healthz') {
-      const extra: Record<string, unknown> = {}
-      for (const bit of healthzBits) Object.assign(extra, bit())
-      if (viteEmbed !== undefined) extra.hmr = 'vite-embedded'
-      return sendJson(res, 200, { ok: true, runtime: label, ...extra })
-    }
-    if (req.method === 'GET' && pathname === '/boot-status') {
-      return sendJson(res, 200, { phase: 'ready', elapsedMs: Math.max(0, Date.now() - bootStartedAt) })
-    }
-
-    // 框架装载器通道（两种形态恒在）：宿主页 <script src="/__ling/boot.js">——dev 态
-    // vite html 转换会给根相对 src 前缀 base（/app/__ling/boot.js），两路由同源应答
-    if (req.method === 'GET' && (pathname === '/__ling/boot.js' || pathname === `${urlPrefix}/__ling/boot.js`)) {
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
-      res.end(LING_BOOT_JS)
-      return
-    }
-
-    // 子应用自动装载通道（标准项目形态）：宿主页一行经典 script 引 /__ling/main.js
-    // ——装载器+ling.config.mjs 键序自动装载；双路由同源应答同 boot.js（dev 态 base
-    // 前缀形态；构建态 vite build 对经典 script 外链原样保留）
-    if (req.method === 'GET' && (pathname === '/__ling/main.js' || pathname === `${urlPrefix}/__ling/main.js`)) {
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
-      res.end(LING_MAIN_JS)
-      return
-    }
-
-    /** /packages 面单点（源码面→产物通道；正路与 /app/packages/* 别名共用）。 */
-    function servePackagesFace(key: string): void {
-      // 客户端源码面（2026-10-26 用户裁定①②）：dev 态（vite 内嵌在场）且该键有
-      // 源码入口 → 改发 ESM 转接 shim——浏览器经 vite /app/@fs/ 直拉包源码入口
-      // （TSX 转译+Fast Refresh+单 React=vite 图天然保证），宿主装载器吃到的
-      // ESM 命名空间与产物 CJS exports 同形（inject/apply）。产物态/无源码面键
-      // （含纯资产 extras）=原样产物文件通道。
-      const source = viteEmbed !== undefined ? clientSourceTable[key] : undefined
-      if (source !== undefined) {
-        const fsUrl = `/app/@fs/${source.entry.replaceAll('\\', '/')}`
-        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
-        res.end(
-          `import * as mod from ${JSON.stringify(fsUrl)}\n` +
-          `${CLIENT_LOADER_GLOBAL}.load({ id: ${JSON.stringify(source.id)}, factory: () => mod })\n`,
-        )
-        return
-      }
-      const file = packagesTable[key]
-      if (file === undefined) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `包面文件未登记: /packages/${key}` } })
-      return serveStaticFile(file, res, notFound)
-    }
-
-    // /app 面：vite 内嵌态=全权交 vite（未认领=显式 500，禁回落 dist——2026-10-26
-    // 用户裁定②「我需要知道有错误而不是回落 dist」）；无内嵌件（hmr 未配置/显式
-    // 关）才走 dist 静态+SPA 兜底
-    if (req.method === 'GET' && (pathname === urlPrefix || pathname.startsWith(`${urlPrefix}/`))) {
-      // /app/packages/* 别名（dev 态坑吸收）：宿主页里根相对 <script src="/packages/…">
-      // 被 vite html 转换前缀 base 后的形态——别名回 /packages 面（正路仍推荐
-      // /__ling/boot.js 运行时装载，本别名兜底易踩形态）
-      if (viteEmbed !== undefined && pathname.startsWith(`${urlPrefix}/packages/`)) {
-        servePackagesFace(decodeURIComponent(pathname.slice(`${urlPrefix}/packages/`.length)))
-        return
-      }
-      if (viteEmbed !== undefined) {
-        viteEmbed.middlewares(req, res, () => sendJson(res, 500, {
-          ok: false,
-          error: { code: 'gateway/hmr-unclaimed', message: `vite 未认领 ${req.method} ${pathname}（dev HMR 形态无 dist 回落——排障见控制台日志）` },
-        }))
-        return
-      }
-      if (pathname === urlPrefix || pathname === `${urlPrefix}/`) {
-        if (staticConf !== undefined) return serveStaticFile(join(staticConf.root, 'index.html'), res, notFound)
-        return notFound()
-      }
-      if (staticConf !== undefined) {
-        const rel = pathname.slice(`${urlPrefix}/`.length)
-        const extra = staticConf.extras?.[rel]
-        if (extra !== undefined) return serveStaticFile(extra, res, notFound)
-        const file = join(staticConf.root, rel)
-        if (!file.startsWith(staticConf.root)) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: '路径越界' } })
-        const assetExt = staticConf.assetExt ?? DEFAULT_ASSET_EXT
-        if (assetExt.test(rel.split('/').pop() ?? '')) return serveStaticFile(file, res, notFound)
-        return serveStaticFile(join(staticConf.root, 'index.html'), res, notFound)
-      }
-      return notFound()
-    }
-    if (req.method === 'GET' && pathname.startsWith('/packages/')) {
-      servePackagesFace(decodeURIComponent(pathname.slice('/packages/'.length)))
-      return
-    }
-    return notFound()
+    // 内建路由：exact→最长 prefix→fallback（404 首见去重观测）
+    await router.dispatch(req, res)
   }
 
   const server = createServer((req, res) => {
@@ -431,6 +448,9 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     })
   })
   server.on('upgrade', (req, socket, head) => {
+    // upgrade 链不迁 WebServerRouter（O1 边界）：路由器 registerUpgrade 是
+    // exact-path 形态，而消费方挂件是谓词式、vite 认领是协议头+base 路径判定——
+    // 形态不匹配，强行迁会削语义；HTTP 面单源化收益已兑现，upgrade 保持链式
     for (const upgrader of upgraders) {
       if (upgrader(req, socket, head)) return
     }

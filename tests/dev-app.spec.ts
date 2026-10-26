@@ -10,7 +10,7 @@ import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineApp, loadEnv, registryOf, runDevApp, type DevAppHandle } from '../src/dev/index.ts'
 import { createFakeViteProject, fakeViteLedger, removeFakeViteProject, resetFakeViteLedger } from './helpers/fake-vite.ts'
 
@@ -61,6 +61,30 @@ describe('runDevApp', () => {
     expect(mountedDefault).toEqual(['d1'])
     expect(order).toEqual(['after-only'])
     await app.dispose()
+  })
+
+  it('404 首见告警去重：同 miss 只告警首见、不同 miss 各告警（missedRoutes 观测面——路由机制迁移防丢钉）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-dedup-'))
+    roots.push(root)
+    const port = await freePort()
+    const app = await runDevApp({ rootDir: root, port, phases: ['only'], modules: [] })
+    apps.push(app)
+    const base = `http://127.0.0.1:${port}`
+    // 模块级去重表防跨用例污染：用独立路径名（其他用例的 miss 不影响本用例首见判定）
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await fetch(`${base}/dedup-a`)
+      await fetch(`${base}/dedup-a`)
+      await fetch(`${base}/dedup-a`)
+      await fetch(`${base}/dedup-b`)
+      expect((await fetch(`${base}/dedup-a`)).status).toBe(404)
+      const warns = warnSpy.mock.calls.map((call) => String(call[0]))
+      expect(warns.filter((w) => w.includes('GET /dedup-a'))).toHaveLength(1)
+      expect(warns.some((w) => w.includes('GET /dedup-b'))).toBe(true)
+    } finally {
+      warnSpy.mockRestore()
+      await app.dispose()
+    }
   })
 
   it('HTTP 内建面：挂件先行（strip 前缀）+healthz 附加位+重定向+静态 SPA+包表+404', async () => {
