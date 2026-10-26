@@ -23,9 +23,17 @@ export interface ClientBundleOptions {
   id: string
   /** esbuild 透传覆盖（如 external/format 细调）。 */
   esbuild?: Record<string, unknown>
+  /** 产物体积告警阈值（字节，缺省 512KB；O6 多面板 React 共享防线——超限打 WARN
+   *  提示核查 external 共享，不阻断）。 */
+  warnBytes?: number
   /** 产物头注释（缺省自动生成）。 */
   banner?: string
 }
+
+/** 缺省体积告警阈值：512KB（react 全内联≈140KB min——单面板合理；多面板宿主每包
+ *  一份 React 时六包即 ~840KB+，跨面板 hooks 互操作也全断——阈值卡在「单面板内联
+ *  尚可、疑似多面板未共享」的带子上提醒核查）。 */
+const DEFAULT_WARN_BYTES = 512 * 1024
 
 /** 内联 require 垫片（零外部依赖时永不触达；真外置依赖时诚实报错）。 */
 const REQUIRE_SHIM = "typeof require === 'function' ? require : function (id) { throw new Error('子应用产物外置依赖未内联: ' + id); }"
@@ -91,7 +99,15 @@ export async function buildClientBundle(options: ClientBundleOptions): Promise<n
   ].join('\n')
   mkdirSync(join(outfile, '..'), { recursive: true })
   writeFileSync(outfile, wrapped)
+  const bytes = Buffer.byteLength(wrapped)
+  // 体积阈值告警（O6）：超限提示 external 共享——多子应用宿主每包内联一份 react
+  // =体积膨胀×N+跨面板 hooks 互操作断；单面板最小样全内联合理，故 WARN 不阻断。
+  if (bytes > (options.warnBytes ?? DEFAULT_WARN_BYTES)) {
+    console.warn(
+      `[buildClientBundle] 子应用 ${options.id} 产物 ${Math.round(bytes / 1024)} KB 超阈值——多面板宿主请用 esbuild.external 外置 react/react-dom 由宿主共享单例（单面板可忽略；warnBytes 可调）`,
+    )
+  }
   // 日志报真实落盘位（防缺省路径推导变化时日志骗人——实证教训）
-  console.log(`[buildClientBundle] 子应用产物已生成 ${outfile}（${Math.round(Buffer.byteLength(wrapped) / 1024)} KB）`)
-  return Buffer.byteLength(wrapped)
+  console.log(`[buildClientBundle] 子应用产物已生成 ${outfile}（${Math.round(bytes / 1024)} KB）`)
+  return bytes
 }

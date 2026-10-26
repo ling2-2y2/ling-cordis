@@ -245,6 +245,13 @@ the capability stays, simple consumers use it per the config-side notes above).
 - **Subapp bundle**: `buildClientBundle({ entry, id })` — esbuild bundles the subapp
   into a subapp-protocol registrator; default output `<pkg>/client/client.js`
   (esbuild is your peer dep).
+- **Multi-subapp hosts must share one React** (O6 guard): the default bundles
+  everything inline (fine for a single-panel minimal sample); a six-panel host
+  inlining React per panel bloats size ×N and breaks cross-panel hooks
+  interop (context/portal across instances) — pass
+  `esbuild: { external: ['react', 'react-dom'] }` and provide React globals on
+  the host page. Bundles over 512KB warn (tune via `warnBytes`); dev mode has
+  no such issue (the vite module graph guarantees a single React).
 - **Build orchestration**: `buildRegisteredModules({ registry, rootDir, carrier })`
   — per-package `build:client` plus the carrier shell target (`vite build`);
   `examples/hmr-react`'s `pnpm build` is the full-chain sample.

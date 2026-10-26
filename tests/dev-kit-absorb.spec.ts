@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildClientBundle, runCheckScripts, themeGate } from '../src/dev/index.ts'
 
 const roots: string[] = []
@@ -124,5 +124,26 @@ describe('buildClientBundle 子应用产物包装器', () => {
     const exports = loaded[0]!.exports as { inject: unknown, apply: unknown }
     expect(Array.isArray(exports.inject)).toBe(true)
     expect(typeof exports.apply).toBe('function')
+  }, 60000)
+
+  it('体积阈值 WARN（O6 多面板 React 共享防线）：超阈值提示 external 共享、缺省档不误报', async () => {
+    const entry = join(import.meta.dirname, 'fixtures', 'client-bundle-entry.ts')
+    const outRoot = mkdtempSync(join(tmpdir(), 'ling-cordis-cb-warn-'))
+    roots.push(outRoot)
+    const outfile = join(outRoot, 'client', 'client.js')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      // 阈值压到 1 字节=必触发（夹具产物 >1B）：提示含子应用 id 与 external 共享指引
+      await buildClientBundle({ entry, outfile, id: 'warn-probe', warnBytes: 1 })
+      const triggered = warnSpy.mock.calls.map((c) => String(c[0]))
+      expect(triggered.some((w) => w.includes('warn-probe'))).toBe(true)
+      expect(triggered.some((w) => w.includes('external'))).toBe(true)
+      // 缺省档（512KB）同一夹具不误报
+      warnSpy.mockClear()
+      await buildClientBundle({ entry, outfile, id: 'warn-probe-2' })
+      expect(warnSpy.mock.calls.map((c) => String(c[0])).some((w) => w.includes('external'))).toBe(false)
+    } finally {
+      warnSpy.mockRestore()
+    }
   }, 60000)
 })

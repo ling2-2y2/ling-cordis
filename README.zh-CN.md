@@ -221,6 +221,11 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 
 - **子应用产物**：`buildClientBundle({ entry, id })`——esbuild 打包成子应用协议注册器，
   产物位缺省 `<包>/client/client.js`（esbuild 使用方自备）。
+- **多子应用宿主须共享 React 单例**（O6 防线）：`buildClientBundle` 缺省全内联（单面板
+  最小样合理）；多面板宿主每包内联一份 React=体积膨胀×N 且跨面板 hooks 互操作全断
+  （context/portal 不同实例）——多面板项目用 `esbuild: { external: ['react',
+  'react-dom'] }` 外置、宿主页自备全局 React。产物超 512KB 打 WARN 提醒核查
+  （`warnBytes` 可调）；dev 态无此问题（vite 模块图天然单 React）。
 - **构建编排**：`buildRegisteredModules({ registry, rootDir, carrier })`——逐包
   `build:client` + 载体壳目标（`vite build`）；范本=`examples/hmr-react` 的 `pnpm build`。
 - **类型检查编排**：`runCheckScripts({ targets })` / `checkRegisteredModules`——

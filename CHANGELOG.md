@@ -2,6 +2,16 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 变更（2026-10-26 架构评审批 2·P1 四件，测试先行 112/112 全绿）
+
+- **内建路由自消费 WebServerRouter（O1）**：`runDevApp` 的 if 链路由迁装配期注册（exact→最长 prefix→404 fallback 唯一座），同仓两套路由机制合一；挂件 handlers 先行语义钉死不变；upgrade 链不迁（exact-path 形态与谓词式/协议头认领不匹配，注释在案）。`webserver` 包自此被 dev 内核真实消费。对拍门=存量 spec+demo:check 7/7+hmr-react 真链 dev 自检 5/5。
+- **静态资产流式下发（O7）**：`serveStaticFile` 改 `createReadStream` 管道——readFileSync 整读同步阻塞事件循环（10MB 级资产卡全进程）根除；缺席走 error 事件 404 回落、已落笔读错误只收尾（流错误吸收）。新钉：1MB 资产完整不截断。
+- **全仓 `strict: true`（O5，超原方案）**：探测实证存量 0 错（含 vendored 血统），原「分档+豁免登记」案作废直接全开；extends 传导 build dts 与 dts-smoke。顺手真类型修正：`buildRegisteredModules`/`checkRegisteredModules` options 泛型化（TEnv 透传，具化注册表不再撞 strict 不变型）。
+- **多面板 React 共享防线（O6）**：`buildClientBundle` 增 `warnBytes`（缺省 512KB）超阈值 WARN 提示 external 共享；README 双语补多子应用宿主共享 React 单例姿势（external react/react-dom+宿主全局 React；dev 态 vite 图天然单 React 无此问题）。
+- 新钉 3 例（404 首见告警去重/1MB 流式完整/阈值 WARN），总数 **112**。
+
 ## [2.3.0] - 2026-10-26（已发布 npm）
 
 ### 新增（2026-10-26 用户令「坑知识进框架，简化使用方」吸收批）
