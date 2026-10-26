@@ -22,8 +22,6 @@ import { ModuleRegistry, type ModuleEntry } from './registry.ts'
 import { createViteEmbed, type ViteEmbed } from './hmr.ts'
 import { WebServerRouter, type WebServerHandler } from '../webserver/index.ts'
 
-/** 404 未命中去重表（方法+路径 → 次数；首见告警，进程级）。 */
-const missedRoutes = new Map<string, number>()
 
 /** .env 装配：解析 key=value 行（parseEnv 语义）注入 process.env（不覆盖显式注入）。 */
 export function loadEnv(file: string, defaults: Record<string, string> = {}): void {
@@ -321,9 +319,11 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   // healthz/boot-status/__ling 双路由）→ 最长 prefix（/packages、urlPrefix 的 /app
   // 面）→ fallback 唯一座（404 首见去重观测）。非 GET 的内建路由等价回落 404。───
   const router = new WebServerRouter()
+  // 404 去重表=实例级（O9：模块级形态会让单进程多实例（测试场景）跨实例污染告警语义）
+  const missedRoutes = new Map<string, number>()
 
   /** 404 未命中应答+观测（2026-10-16 上传 404 静默事故立法）：同 miss 只告警首见
-   * （防资产类重复刷屏），重复计数进 missedRoutes（进程级）。 */
+   * （防资产类重复刷屏），重复计数进 missedRoutes（实例级——O9）。 */
   const notFound = (req: IncomingMessage, res: ServerResponse): void => {
     const key = `${req.method} ${new URL(req.url ?? '/', 'http://localhost').pathname}`
     const hits = (missedRoutes.get(key) ?? 0) + 1

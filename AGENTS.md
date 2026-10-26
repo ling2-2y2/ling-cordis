@@ -42,7 +42,7 @@ ling-cordis 是独立发布的 cordis 血统插件运行时 + `/dev` 开发工�
 - **站点前缀单源 basePath**（2026-10-26 架构评审 O3 裁定落地）：`DevAppConfig.basePath`（缺省 `/app`，尾斜杠归一）——`staticApp.urlPrefix` 与 `hmr.base` 未显式设置时由它派生，显式设置优先；勿再两处各写前缀。
 - **容器化正典**（2026-10-26 架构评审 O4+裁-2/裁-3）：`examples/hmr-react/Dockerfile` 多阶段模板——构建期 sed 重写演示形态相对 import 为包出口（消费方形态正典）；运行期仅产物+`pnpm install --prod` 框架包；非 root+HEALTHCHECK /healthz+SIGTERM 有界停机。发布走 `scripts/release.mjs`（裁-6：本地编排，129 构建+探活，不走云端）。
 - **测试门禁**：`pnpm typecheck` + `pnpm test`（当前 112 例）+ 例程自检（`pnpm demo:check`；hmr-react 在包内 `pnpm dev --check` / `pnpm start --check`，例程依赖自备后可跑）全绿才算交付；`prepublishOnly` 三连（typecheck+test+build）。**全仓 `strict: true`**（2026-10-26 架构评审 O5：存量 0 错直开，原分档豁免案作废）——新代码一律按严格空值检查写。
-- **注释语言**：代码注释一律中文；用户裁定内容必须在相关注释中显著写明。
+- **注释语言**：代码注释一律中文；用户裁定内容必须在相关注释中显著写明。**豁免登记（裁-5，2026-10-26）**：`src/core`/`src/kit`/`src/schema`/`src/plugins` 上游移植血统文件保持英文注释——与上游对拍（ling-upstream-sync 纪律）diff 噪音最小化优先；自研文件（`src/dev`/`src/webserver`/`scripts`/`tests`/`examples`）中文。修改血统文件时不强制回翻既有英文注释，新增行建议中文。
 
 ## 五、能力面清单（动 API 先对表本清单）
 
