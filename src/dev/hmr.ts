@@ -28,24 +28,30 @@ export interface ViteEmbedOptions {
   logger?: (level: 'info' | 'warn' | 'error', message: string) => void
 }
 
-/** 运行中的 vite 内嵌件。 */
-export interface ViteEmbed {
-  /** connect 形态页面处理器——next=未认领（调用方须显式报错，禁回落 dist）。 */
-  middlewares: (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void
-  /** 停机（vite server.close：关文件监听/模块图缓存/HMR 通道）。 */
-  dispose(): Promise<void>
-}
-
 /** vite createServer 入参的最小类型面（真形=vite 官方 InlineConfig，此处只钉本件消费的字段）。 */
 interface ViteCreateServerOptions {
   root: string
   server: { middlewareMode: true; hmr: { server: Server } }
 }
 
-/** vite dev server 的最小类型面（middlewares+close 两消费点）。 */
+/** vite dev server 的最小类型面（middlewares+close+config.base 三消费点）。 */
 interface ViteDevServerLike {
   middlewares: ViteEmbed['middlewares']
   close: () => Promise<void>
+  /** vite 配置面（本件只消费 base——热更 ws 认领路径判定用）。 */
+  config?: { base?: string }
+}
+
+/** 运行中的 vite 内嵌件。 */
+export interface ViteEmbed {
+  /** connect 形态页面处理器——next=未认领（调用方须显式报错，禁回落 dist）。 */
+  middlewares: (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => void
+  /** 热更 ws 升级认领判定：true=该升级请求属 vite HMR（协议头 vite-hmr/vite-ping 且
+   * 路径=base），调用方 upgrade 兜底销毁前必须放行——vite 自挂的监听器会接管
+   * （真机探针实证：不放行则热更握手被兜底 socket.destroy() 掐死）。 */
+  claimsUpgrade(req: IncomingMessage): boolean
+  /** 停机（vite server.close：关文件监听/模块图缓存/HMR 通道）。 */
+  dispose(): Promise<void>
 }
 
 /** 路径包含判定：resolved 是否落在 base 目录之内（vitest/NODE_PATH 会把外部依赖
@@ -96,9 +102,21 @@ export async function createViteEmbed(options: ViteEmbedOptions): Promise<ViteEm
   } catch (error) {
     throw new Error(`vite dev server 初始化失败（cwd=${options.cwd}）：${error instanceof Error ? error.message : String(error)}`)
   }
+  // 热更 ws 认领路径=vite base（对齐 vite 源码 createWebSocketServer：协议头
+  // vite-hmr/vite-ping 且 pathname===base 才接管；本件未配 hmr.path——配了需同款 join）
+  const hmrBase = viteServer.config?.base ?? '/'
   log('info', 'vite 内嵌就绪（同进程同端口：页面中间件+HMR ws 均走载体口，无独立 vite 端口）')
   return {
     middlewares: viteServer.middlewares,
+    claimsUpgrade: (req) => {
+      const protocol = req.headers['sec-websocket-protocol']
+      if (protocol !== 'vite-hmr' && protocol !== 'vite-ping') return false
+      try {
+        return new URL(req.url ?? '/', 'http://example.com').pathname === hmrBase
+      } catch {
+        return false
+      }
+    },
     dispose: () => viteServer.close(),
   }
 }

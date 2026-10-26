@@ -86,6 +86,23 @@ describe('createViteEmbed', () => {
     await expect(createViteEmbed({ cwd, httpServer: shell })).rejects.toThrow(/vite 包缺席|pnpm install|LING_WEB_HMR=0/u)
   })
 
+  it('claimsUpgrade：vite-hmr/vite-ping 协议头+base 路径才认领（其他路径/无协议头=false）', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    const embed = await createViteEmbed({ cwd, httpServer: shell })
+    embeds.push(embed)
+    // 假 vite config.base='/app/'——认领面=协议头 ∈ {vite-hmr, vite-ping} 且路径===base
+    expect(embed.claimsUpgrade({ url: '/app/', headers: { 'sec-websocket-protocol': 'vite-hmr' } } as never)).toBe(true)
+    expect(embed.claimsUpgrade({ url: '/app/', headers: { 'sec-websocket-protocol': 'vite-ping' } } as never)).toBe(true)
+    expect(embed.claimsUpgrade({ url: '/app/', headers: {} } as never)).toBe(false)
+    // 协议头对但路径越权（他面路径）=不认领——防 vite 冒领站内信等其他 ws 面
+    expect(embed.claimsUpgrade({ url: '/message/websocket', headers: { 'sec-websocket-protocol': 'vite-hmr' } } as never)).toBe(false)
+    expect(embed.claimsUpgrade({ url: '/app/src/main.tsx', headers: { 'sec-websocket-protocol': 'vite-hmr' } } as never)).toBe(false)
+  })
+
   it('dispose：vite server.close 被调（台账 closed+1）', async () => {
     const cwd = createFakeViteProject()
     roots.push(cwd)

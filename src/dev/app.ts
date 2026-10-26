@@ -311,10 +311,12 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     for (const upgrader of upgraders) {
       if (upgrader(req, socket, head)) return
     }
+    // vite HMR 的升级请求由 vite 自挂在 server 上的监听器按（协议头+base 路径）
+    // 认领接管——本链不处置、放行给 vite（真机探针实证：此处若照常 destroy 会把
+    // 热更 ws 握手掐死，HMR 断连）
+    if (viteEmbed?.claimsUpgrade(req) === true) return
     socket.destroy()
   })
-  // 注：vite 内嵌态的 HMR ws 升级由 vite 自挂在 server 上的监听器按
-  // sec-websocket-protocol: vite-hmr 认领，与上面挂件升级面并存互不干扰。
 
   // 端口卫兵：healthz 已有应答=旧实例在跑，fail loud
   if (await fetch(`http://${host}:${port}/healthz`).then(() => true, () => false)) {

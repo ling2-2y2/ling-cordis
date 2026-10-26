@@ -6,6 +6,7 @@
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -151,6 +152,49 @@ describe('runDevApp', () => {
     await app.dispose()
     expect(fakeViteLedger.closed).toBeGreaterThanOrEqual(1)
   })
+
+  it('ws 升级分派：vite HMR 认领面放行（不被兜底 destroy 掐死）、他面路径照常销毁', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    roots.push(root)
+    const port = await freePort()
+    const app = await runDevApp({
+      rootDir: root,
+      port,
+      phases: ['only'],
+      modules: [],
+      hmr: { cwd },
+    })
+    apps.push(app)
+    // 原始升级探针（真机 8461 轮同款手法）：A=vite-hmr 协议头@base → app 链放行
+    // （假 vite 无 ws 实现 → 无 101 应答，判据=socket 不被立即销毁、存活>1.2s）；
+    // B=他面路径普通升级 → 兜底 socket.destroy()（<600ms 内断）
+    const sockets: ReturnType<typeof connect>[] = []
+    const probe = (path: string, protocol?: string): Promise<'survive' | 'destroyed'> =>
+      new Promise((resolve, reject) => {
+        const socket = connect(port, '127.0.0.1')
+        sockets.push(socket)
+        let settled = false
+        socket.on('connect', () => {
+          let head = `GET ${path} HTTP/1.1\r\nhost: 127.0.0.1:${port}\r\nconnection: Upgrade\r\nupgrade: websocket\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nsec-websocket-version: 13\r\n`
+          if (protocol !== undefined) head += `sec-websocket-protocol: ${protocol}\r\n`
+          socket.write(`${head}\r\n`)
+        })
+        socket.on('close', () => { if (!settled) { settled = true; resolve('destroyed') } })
+        socket.on('error', (error) => { if (!settled) { settled = true; reject(error) } })
+        setTimeout(() => { if (!settled) { settled = true; resolve('survive') } }, 1200)
+      })
+    try {
+      const started = Date.now()
+      expect(await probe('/app/', 'vite-hmr')).toBe('survive')
+      expect(Date.now() - started).toBeGreaterThanOrEqual(1100)
+      expect(await probe('/message/websocket')).toBe('destroyed')
+    } finally {
+      for (const socket of sockets) socket.destroy()
+    }
+    await app.dispose()
+  }, 20000)
 
   it('HMR 内嵌+依赖缺席：runDevApp 拒启（fail loud，不静默回落 dist）', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
