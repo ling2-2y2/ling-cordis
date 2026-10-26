@@ -11,7 +11,7 @@
  * 规避工厂函数自举环）。业务面（认证/RPC/面收编）经 http 挂件注入，框架零业务。
  * @module @ling2/ling-cordis/dev/app
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { Duplex } from 'node:stream'
@@ -198,16 +198,10 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-function serveStaticFile(file: string, res: ServerResponse, notFound: () => void): void {
-  let body: Buffer
-  try {
-    body = readFileSync(file)
-  } catch {
-    notFound()
-    return
-  }
+/** 静态资产 content-type 判定（扩展名白名单）。 */
+function contentTypeOf(file: string): string {
   const ext = extname(file)
-  const contentType = ext === '.js' || ext === '.mjs' ? 'text/javascript; charset=utf-8'
+  return ext === '.js' || ext === '.mjs' ? 'text/javascript; charset=utf-8'
     : ext === '.css' ? 'text/css'
     : ext === '.html' ? 'text/html; charset=utf-8'
     : ext === '.json' || ext === '.map' ? 'application/json; charset=utf-8'
@@ -215,8 +209,24 @@ function serveStaticFile(file: string, res: ServerResponse, notFound: () => void
     : ext === '.png' ? 'image/png'
     : ext === '.woff2' ? 'font/woff2'
     : 'application/octet-stream'
-  res.writeHead(200, { 'content-type': contentType })
-  res.end(body)
+}
+
+/**
+ * 静态资产下发（O7 流式化）：createReadStream 管道——readFileSync 整读会同步阻塞
+ * 事件循环，10MB 级资产（Univer 先例）每个未命中缓存的请求都卡住全进程所有请求。
+ * 缺席/不可读=error 事件走 notFound 回落；已落笔后的读错误只收尾（流错误吸收，
+ * 不升级进程级异常——与 rpc.ts 停摆尾同款纪律）。
+ */
+function serveStaticFile(file: string, res: ServerResponse, notFound: () => void): void {
+  const stream = createReadStream(file)
+  stream.on('error', () => {
+    if (!res.headersSent) { notFound(); return }
+    res.end()
+  })
+  stream.on('open', () => {
+    res.writeHead(200, { 'content-type': contentTypeOf(file) })
+    stream.pipe(res)
+  })
 }
 
 /** 有界停机：dispose 挂起 5s 强杀兜底；停机中再按立即强杀。 */

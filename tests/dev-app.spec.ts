@@ -4,7 +4,7 @@
  * 全部用临时端口+编程式 dispose 句柄，进程不悬挂。
  * @module @ling2/ling-cordis/tests/dev-app
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -85,6 +85,35 @@ describe('runDevApp', () => {
       warnSpy.mockRestore()
       await app.dispose()
     }
+  })
+
+  it('静态资产流式下发：1MB 资产完整不截断；登记键物理缺席走 404（O7 流式化钉）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-stream-'))
+    roots.push(root)
+    const staticRoot = join(root, 'web')
+    mkdirSync(staticRoot)
+    const payload = 'x'.repeat(1024 * 1024)
+    writeFileSync(join(staticRoot, 'big.js'), payload)
+    // 登记存在但物理缺席（packagesExtras 指向已删文件——serveStaticFile 的 notFound 回落）
+    const ghost = join(root, 'ghost.js')
+    writeFileSync(ghost, '// ghost')
+    const port = await freePort()
+    const app = await runDevApp({
+      rootDir: root,
+      port,
+      staticApp: { root: staticRoot },
+      packagesExtras: { 'ghost/client.js': ghost },
+      phases: ['only'],
+      modules: [],
+    })
+    apps.push(app)
+    const base = `http://127.0.0.1:${port}`
+    const body = await fetch(`${base}/app/big.js`).then((r) => r.text())
+    expect(body.length).toBe(1024 * 1024)
+    expect(body).toBe(payload)
+    rmSync(ghost)
+    expect((await fetch(`${base}/packages/ghost/client.js`)).status).toBe(404)
+    await app.dispose()
   })
 
   it('HTTP 内建面：挂件先行（strip 前缀）+healthz 附加位+重定向+静态 SPA+包表+404', async () => {
