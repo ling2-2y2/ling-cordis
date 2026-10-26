@@ -21,13 +21,13 @@ export interface ModuleEntry<TEnv = unknown> {
   /** 浏览器产物：key=静态通道键；path=产物相对包目录路径，缺省 'client/client.js'；
    * entry=**源码入口**相对包目录路径（dev 态客户端源码面直供用），缺省按约定
    * 依存在探测 src/client/index.tsx → src/client/index.ts（2026-10-26 用户裁定
-   * 「面板真 HMR、机制落框架」—— ling-cordis 内建，见 app.ts /packages 分派）。 */
+   * 「子应用真 HMR、机制落框架」—— ling-cordis 内建，见 app.ts /packages 分派）。 */
   client?: { key: string; path?: string; entry?: string }
   /** 挂载函数（装配方在相循环内调用；env=装配方构造的挂载环境，形状自定）。 */
   mount?: (ctx: Context, env: TEnv) => void | Promise<void>
 }
 
-/** 客户端源码面约定入口探测序（tsx 优先——React 面板主流形态）。 */
+/** 客户端源码面约定入口探测序（tsx 优先——React 子应用主流形态）。 */
 const CLIENT_ENTRY_CONVENTIONS = ['src/client/index.tsx', 'src/client/index.ts']
 
 /** 模块注册表——构造后只增条目，查询均为纯派生（无副作用）。 */
@@ -80,7 +80,7 @@ export class ModuleRegistry<TEnv = unknown> {
   /** 客户端源码面表（dev 态 /packages 源码直供消费）：client 键 → { id, entry 绝对
    * 路径 }。entry=条目显式声明或缺省约定探测（两式皆缺席=该键无源码面，dev 态回
    * 落产物文件）。extras=静态表额外键（packagesExtras——值=产物绝对路径，按其包
-   * 目录同约定探测；ling-dsh-common 这类「无挂载面但有面板产物」的包由此纳入）。 */
+   * 目录同约定探测；ling-dsh-common 这类「无挂载面但有子应用产物」的包由此纳入）。 */
   clientSourceTable(rootDir: string, extras: Record<string, string> = {}): Record<string, { id: string, entry: string }> {
     const table: Record<string, { id: string, entry: string }> = {}
     const probe = (id: string, pkgDir: string, declared?: string): { id: string, entry: string } | undefined => {

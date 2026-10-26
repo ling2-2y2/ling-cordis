@@ -14,6 +14,20 @@ A standalone [cordis](https://github.com/koishijs/cordis)-lineage plugin runtime
 - **Schema** — the schemastery builder: declarative config schemas, standard-schema v1 interface, `Volatile` stable-reference configs.
 - **Console logger** — leveled logging with colors, diff suffixes, and per-name palette.
 
+## Glossary (unified terms)
+
+| Term | Definition |
+| --- | --- |
+| **Host shell** | the resident browser shell page (`index.html` + loader) — provides only the container and the load face, no business UI |
+| **Subapp** | the **sub-app** notion — the *thing being loaded*: one business package's browser half (the package's own client artifact, one JS file) that registers into the host via the subapp protocol and mounts its own UI. Compare a qiankun sub-app / a VS Code webview |
+| **Slot** | the host-side **mount point** — the *place* it loads into (the dsh host's subapp/slot system): which page position a subapp occupies is decided by the slot. Subapp and slot are two different terms — do not conflate |
+| **Subapp protocol** | the registration face `window.__ModuleLoader__.load({id, factory})` plus the activation contract that the factory returns `{inject, apply}` |
+| **Subapp key** | the `client.key` of a ling.config.mjs module entry — the subapp's load name and `/packages` channel key; the single source of the auto-load order |
+| **Loader** | the framework route `/__ling/boot.js`: default load-face implementation + `lingLoadSubapps` (for hosts with their own loader) |
+| **Auto-load** | the framework route `/__ling/main.js`: the loader plus automatic `lingLoadSubapps` ordered by the module list — the standard project host page references it in one line |
+| **`/packages` channel** | the subapp delivery path: dev serves a source shim (HMR applies), product serves `client/client.js` |
+| **Shell/subapp artifacts** | `dist/` = the host-page static assets built by vite; `client/client.js` = the subapp registrator built by `buildClientBundle` (neither is committed) |
+
 ## Architecture
 
 Four layers — you only ever write the top one; the other three ship in this package:
@@ -182,40 +196,28 @@ experience.
 
 ### Frontend HMR (in-process vite, single port)
 
-One `hmr` line plus two host-page lines is the whole integration:
+One `hmr` line plus one host-page line is the whole integration (terms: see Glossary).
 
-- **Config side**: `hmr: { cwd: <vite project root>, react: true }` — the
-  framework loads `@vitejs/plugin-react` from your cwd (peer-dep contract:
-  missing/foreign rejects), synthesizes `base: '/app/'` and dep prewarming
-  (convention probe `src/client/index.tsx|.ts`) — **zero vite.config for simple
-  consumers**. Complex consumers (alias families) bring their own
-  `vite.config.ts` and merge naturally — then leave `react: true` off
-  (double plugin = duplicate registration).
-- **Host page side** (ling-web shape = the standard project shape):
-  `index.html` references exactly one module entry,
-  `<script type="module" src="/src/shell.ts">`; `shell.ts` (the same six lines
-  everywhere — see the next section, "Standard project layout") runtime-imports
-  `/__ling/boot.js` and then calls `lingLoadPanels(['my-plugin/client.js'])`.
-  Zero-build host pages may use the two-line form: `<script
-  src="/__ling/boot.js"></script>` + an inline
-  `<script>lingLoadPanels(['key'])</script>` — the framework loader ships the
-  panel-protocol load face (default `window.__ModuleLoader__.load({id, factory})`,
-  never clobbering a host's own loader) and the runtime-dynamic-import path;
-  both shapes share the same load face. **Do not** reference panels via
-  `<script src="/packages/…">` or static `import`: in dev, vite's html
-  transform prefixes root-relative URLs with the base (`/app/packages/*` is
-  aliased as a safety net) and inline module scripts get extracted into
-  html-proxy modules the middleware-mode vite does not serve.
-- **Panel side**: registry entries with `client: { key }` and the convention
-  entry (`src/client/index.tsx|.ts`) → in dev, `/packages/<key>` serves an ESM
-  shim (browser pulls source through `/app/@fs/`, React Fast Refresh applies);
-  product form serves the built bundle unchanged.
-- **Semantics notes** (verified on real machines): ①components and the
-  `apply`/`inject` protocol exports must live in separate modules — a mixed
-  module hot-reloads via remount (state lost); ②React `StrictMode` makes the
-  **first** hot update after page load remount once; ③without dep prewarming
-  the first page load races vite's optimizer cold start (the convention probe
-  is on by default for exactly this).
+- **Config side**: `hmr: { cwd: <vite project root>, react: true }` — zero
+  vite.config for simple consumers (the framework loads `@vitejs/plugin-react`
+  itself and synthesizes `base: '/app/'` plus dep prewarming); consumers with
+  their own `vite.config.ts` leave `react: true` off (double plugin is
+  forbidden).
+- **Host page side**: `index.html` references exactly one line,
+  `<script src="/__ling/main.js"></script>` (subapp key order = the
+  ling.config.mjs module list). Hosts with their own loader (e.g. the ling-web
+  client-kernel) use the two-line form instead: `<script
+  src="/__ling/boot.js">` + an inline
+  `<script>lingLoadSubapps(['key'])</script>`. **Forbidden**: referencing
+  `/packages/*` directly, inline `type="module"`, or static `import` of
+  framework scripts.
+- **Subapp side**: module entries with `client: { key }` and the convention
+  entry (`src/client/index.tsx|.ts`) — in dev, `/packages/<key>` serves source
+  directly (HMR applies); in product the same key serves `client/client.js`.
+- **Semantics rules**: ① components and the `apply`/`inject` protocol exports
+  live in **separate modules** (mixed modules hot-reload with state lost);
+  ② under React `StrictMode` the first hot update after load remounts once
+  (normal afterwards).
 
 A runnable sample lives in [`examples/hmr-react`](./examples/hmr-react) — the
 ling-web shape (a standard `vite.config.ts` plus the standard project trio,
@@ -223,8 +225,8 @@ after `pnpm install --ignore-workspace` inside the package):
 
 | Command | Role |
 | --- | --- |
-| `pnpm dev` | Dev environment (HMR): in-process single-port vite; open `/app/` and edit `src/client/DemoPanel.tsx` for instant hot updates; `--check` runs the 4-probe self-test |
-| `pnpm build` | Compile two artifacts: the shell `dist/` (vite build) + the panel `client/client.js` (the framework's `buildClientBundle` wraps it as a panel-protocol registrator) |
+| `pnpm dev` | Dev environment (HMR): in-process single-port vite; open `/app/` and edit `src/client/DemoView.tsx` for instant hot updates; `--check` runs the 5-probe self-test |
+| `pnpm build` | Compile two artifacts: the shell `dist/` (vite build) + the subapp `client/client.js` (the framework's `buildClientBundle` wraps it as a subapp-protocol registrator) |
 | `pnpm start` | Boot the build output — no vite, same page and same load face; `--check` self-test |
 
 Another reference consumer is `ling-harness-runner` (container shape: same
@@ -235,40 +237,29 @@ the capability stays, simple consumers use it per the config-side notes above).
 
 ### Build & checks (one-line integrations too)
 
-- **Panel bundle**: `buildClientBundle({ entry, id })` — esbuild bundles the panel
-  source into a single-file cjs wrapped as the **panel-protocol registrator**
-  (charset, require shim, and load face all built in; esbuild is your peer
-  dep — missing fails loud). Default output `<pkg>/client/client.js`.
+- **Subapp bundle**: `buildClientBundle({ entry, id })` — esbuild bundles the subapp
+  into a subapp-protocol registrator; default output `<pkg>/client/client.js`
+  (esbuild is your peer dep).
 - **Build orchestration**: `buildRegisteredModules({ registry, rootDir, carrier })`
-  — per-package `build:client` plus a carrier target (the shell `vite build`
-  producing dist); `examples/hmr-react`'s `pnpm build` is the full-chain sample.
+  — per-package `build:client` plus the carrier shell target (`vite build`);
+  `examples/hmr-react`'s `pnpm build` is the full-chain sample.
 - **Typecheck orchestration**: `runCheckScripts({ targets })` /
   `checkRegisteredModules` — runs each package's `check` script and aggregates
-  a full report (failures never throw; ok/failed carry exit codes).
-- **Theme gate engine**: `themeGate({ tokenSheets, bundles, allowedVars,
+  the report (failures never throw).
+- **Theme gate**: `themeGate({ tokenSheets, bundles, allowedVars,
   allowedPrefixes, skipBundleE3Prefixes, strict })` — E1 ghost tokens / E2
-  hardcoded theme defines / E3 light-bg warnings / strict hardcoded colors;
-  `stripCommentsLine` and `printThemeGateResult` are exported for consumer-side
-  strict source scans (the bsh tree's theme-guard is the reference consumer:
-  policy allowlists local, engine from the framework).
-- **Path discipline**: everything goes through `node:path` / `pathToFileURL`
-  (Linux/Windows compatible; no drive-letter string concatenation). The
-  build-output startup archetype is `ling-harness-runner`
-  (`pnpm dev` / `pnpm build` / `pnpm start`).
+  hardcoded theme defines / E3 light-bg / strict hardcoded colors;
+  `stripCommentsLine` and `printThemeGateResult` are exported too (reference
+  consumer: the bsh tree's theme-guard).
+- **Path rules**: always `node:path` / `pathToFileURL` (Linux/Windows
+  compatible); no drive-letter string concatenation.
 
-**The gateway is an empty shell; every policy is your layer.** `createRpcServer`
-is koa-style onion composition only — no routes, no protocol shapes, nothing
-auto-mounted. Compose explicit layers: the mechanical pieces shipped with the
-package (`jsonResponder` — outermost response sink; `faceInvoker` — innermost
-`POST /api/<ns>/<method>` dispatch with by-name arg binding), plus your
-business layers in between (auth trio, session gate, audit, logging). Layer
-order *is* the semantics: an audit layer outside the invoker rewrites the
-value right before it is sent; nesting comes free (ALS-style request-context
-propagation is just a middleware wrapping `next()`). Layer objects may carry
-`onInit` / `onReady` / `onDestroy`, dispatched through `createRpcFace` and
-`runDevApp`'s face slots. In `examples/dev-app` the whole auth trio + session
-gate is ~40 lines of demo-owned middleware — that's the intended shape for
-your policies.
+**The gateway is an empty shell**: `createRpcServer` is onion composition only —
+layer order = `jsonResponder` (outermost response sink) → your business layers
+(auth trio / session gate / audit / logging) → `faceInvoker` (innermost
+`POST /api/<ns>/<method>` dispatch with by-name arg binding); layer objects may
+carry `onInit` / `onReady` / `onDestroy`. Reference: the ~40 lines of demo-owned
+auth + session-gate middleware in `examples/dev-app`.
 
 ### Standard project layout (ling-web shape)
 
@@ -284,17 +275,16 @@ requirements):
 <pkg root>/
 ├── ling.config.mjs        # assembly declaration (single combo source): module list + phases; dev = embedded HMR, product = dist static
 ├── boot.mjs               # boot script: imports config → runDevApp; shared by dev/product forms; --check self-test
-├── build.mjs              # pnpm build entry: viteBuild (shell dist/) + buildClientBundle (panel bundle)
+├── build.mjs              # pnpm build entry: viteBuild (shell dist/) + buildClientBundle (subapp bundle)
 ├── vite.config.ts         # standard vite config (base '/app/' + react plugin) — required by complex consumers, optional for simple ones
-├── index.html             # host page: single duty = #root container + <script type="module" src="/src/shell.ts">
+├── index.html             # host page: single duty = #root container + <script src="/__ling/main.js"> (subapp loading lives in the framework)
 ├── src/
-│   ├── shell.ts           # browser shell entry (same six lines everywhere): runtime-fetch framework loader + name panel keys
 │   └── client/
-│       ├── index.tsx      # panel protocol exports export { inject, apply } — the /packages source-face convention entry
-│       └── DemoPanel.tsx  # pure React components and business source (separate from protocol exports = Fast Refresh keeps state)
+│       ├── index.tsx      # subapp protocol exports export { inject, apply } — the /packages source-face convention entry
+│       └── DemoView.tsx  # pure React components and business source (separate from protocol exports = Fast Refresh keeps state)
 ├── dist/                  # [artifact, not committed] shell static assets (vite build; product staticApp root)
 ├── client/
-│   └── client.js          # [artifact, not committed] panel-protocol registrator (buildClientBundle; product /packages channel)
+│   └── client.js          # [artifact, not committed] subapp-protocol registrator (buildClientBundle; product /packages channel)
 └── package.json           # standard trio dev/build/start + peer devDeps (vite/react/esbuild/tsx)
 ```
 
@@ -305,31 +295,17 @@ framework, not renameable; **yours** = content owned by your business):
 | --- | --- | --- |
 | `ling.config.mjs` | single combo source: module list (id/phase/client/mount), the dev-form `hmr` line, product-form `staticApp` switch | path=convention, content=yours |
 | `boot.mjs` | boot script: read config → `runDevApp`; `--check` self-test | same |
-| `build.mjs` | `pnpm build` entry: shell + panel dual targets | same |
+| `build.mjs` | `pnpm build` entry: shell + subapp dual targets | same |
 | `vite.config.ts` | standard vite config (`base '/app/'` + react plugin); simple consumers may omit it (`hmr.react:true` framework synthesis) | optional |
-| `index.html` | host page: `#root` container + shell.ts reference; **never** inline load logic or reference panels directly | the only html, in the build graph |
-| `src/shell.ts` | browser shell entry: the same six-line trigger (see below); the key list = this page's panels | path=convention, keys=yours |
-| `src/client/index.tsx` | panel protocol exports `export { inject, apply }`; **never** mix in components (mixed modules hot-reload via remount, state lost) | convention entry |
+| `index.html` | host page: `#root` container + one classic script line for `/__ling/main.js`; **never** reference subapps directly or inline load logic | the only html, in the build graph |
+| `src/client/index.tsx` | subapp protocol exports `export { inject, apply }`; **never** mix in components (mixed modules hot-reload via remount, state lost) | convention entry |
 | `src/client/*.tsx` | pure components and business source — the substance that hot-reloads with state | yours |
-| `dist/`, `client/client.js` | the two build artifacts (shell/panel) | artifacts, not committed |
+| `dist/`, `client/client.js` | the two build artifacts (shell/subapp) | artifacts, not committed |
 
-**Where `src/shell.ts` sits** (why the load action must live there instead of
-`index.html`): it dodges three real-machine-verified vite traps — ① root-
-relative `<script src>` gets base-prefixed by vite's html transform (→404);
-② inline `type="module"` scripts get extracted into html-proxy modules that a
-middleware-mode vite never serves (→500); ③ a static
-`import '/__ling/boot.js'` written in source gets rewritten by vite's import
-analysis. The correct path is "a local module inside the vite root (enters the
-build graph, dev serves the same path, React preamble auto-injected into the
-html) + a runtime dynamic import (`new Function` escape — the runtime URL
-never enters the build graph)". `shell.ts` is exactly that minimal vehicle:
-it runtime-fetches `/__ling/boot.js` (a framework route) to obtain
-`lingLoadPanels`, then names this page's panel keys. Every consumer carries
-the same lines verbatim, differing only in the key list; the loader itself
-(the default `window.__ModuleLoader__` implementation + `lingLoadPanels`)
-lives in the framework — consumers carry zero loading logic. Zero-build host
-pages skip shell.ts and use the two-line form from the previous section —
-both shapes share the same load face.
+**Loading rule**: the host page's entire loading wiring is one line,
+`<script src="/__ling/main.js">`; the single source of the subapp key order is
+the ling.config.mjs module list's `client.key` (packagesExtras shared chunks
+are not auto-loaded).
 
 ## Modules
 

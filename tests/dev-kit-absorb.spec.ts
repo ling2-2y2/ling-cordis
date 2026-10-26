@@ -1,6 +1,6 @@
 /**
  * 收编件回归（2026-10-26 用户令「类型检查/样式检查/build 收归 ling-cordis」）——
- * themeGate 引擎判定面、runCheckScripts 编排、buildClientBundle 面板产物包装器。
+ * themeGate 引擎判定面、runCheckScripts 编排、buildClientBundle 子应用产物包装器。
  * @module @ling2/ling-cordis/tests/dev-kit-absorb
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -27,7 +27,7 @@ function themeFixture(): { root: string, sheetDir: string, bundle: string } {
   mkdirSync(pkg, { recursive: true })
   const bundle = join(pkg, 'client.js')
   writeFileSync(bundle, [
-    "// 假面板产物（CSS 单行串约定）",
+    "// 假子应用产物（CSS 单行串约定）",
     "  '--ink: #333',",
     "  '.panel { background: #fff; }',",
     "  '.a { color: var(--dsw-bg) }',",
@@ -99,7 +99,7 @@ describe('runCheckScripts 编排', () => {
   }, 60000)
 })
 
-describe('buildClientBundle 面板产物包装器', () => {
+describe('buildClientBundle 子应用产物包装器', () => {
   it('打包源码入口→注册器产物：装载面收到 id+factory（factory 返回模块 exports）', async () => {
     // 夹具入口放在仓内 tests/fixtures（esbuild 对等件解析从此处向上达 cordis devDeps）
     const entry = join(import.meta.dirname, 'fixtures', 'client-bundle-entry.ts')

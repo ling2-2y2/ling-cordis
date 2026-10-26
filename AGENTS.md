@@ -1,6 +1,6 @@
 # AGENTS.md — ling-cordis 仓规则（人与 AI 协作共守）
 
-ling-cordis 是独立发布的 cordis 血统插件运行时 + `/dev` 开发工具族（模块注册表 / vite 内嵌 HMR / 客户端源码面 / 框架装载器 / 面板产物构建件 / 检查编排 / 主题门引擎 / 载体内核 runDevApp）。本仓的产物被 bsh 树等多项目消费——**框架件的每一处行为变化都会放大到所有消费方**，故立以下规则。
+ling-cordis 是独立发布的 cordis 血统插件运行时 + `/dev` 开发工具族（模块注册表 / vite 内嵌 HMR / 客户端源码面 / 框架装载器 / 子应用产物构建件 / 检查编排 / 主题门引擎 / 载体内核 runDevApp）。本仓的产物被 bsh 树等多项目消费——**框架件的每一处行为变化都会放大到所有消费方**，故立以下规则。
 
 ---
 
@@ -35,7 +35,7 @@ ling-cordis 是独立发布的 cordis 血统插件运行时 + `/dev` 开发工�
 
 - **对等件契约**：vite / @vitejs/plugin-react / esbuild 一律是**使用方自备**依赖——框架从使用方 cwd（或入口所在包）`createRequire` 解析 + 包含守卫（`isInside`/最近 package.json 锚），缺席/越界 **fail loud 拒启**，禁静默回落（2026-10-26 用户裁定）。
 - **同进程单端口 HMR**：vite 以库形态 `middlewareMode` 内嵌载体进程，HMR ws 挂载体自己的 http 服务——**无独立 vite 端口、无子进程**（历史子进程桥形态已退役，勿再引用）。
-- **面板协议**：源码入口 `export { inject, apply }`；装载面 `window.__ModuleLoader__.load({id, factory})`（框架装载器 `/__ling/boot.js` 提供缺省实现，宿主自持装载器不覆盖）；宿主页引面板走 `lingLoadPanels`（运行时动态导入）——**勿用** `<script src="/packages/…">`（vite html 转换前缀 base）或静态 import（html-proxy 中间件态 500）。
+- **子应用协议**：源码入口 `export { inject, apply }`；装载面 `window.__ModuleLoader__.load({id, factory})`（框架装载器 `/__ling/boot.js` 提供缺省实现，宿主自持装载器不覆盖）；宿主页引子应用走 `lingLoadSubapps`（运行时动态导入）——**勿用** `<script src="/packages/…">`（vite html 转换前缀 base）或静态 import（html-proxy 中间件态 500）。
 - **React Fast Refresh 语义**：组件与协议导出分模块（混出=热更重挂载丢状态）；StrictMode 使装载后首次热更重挂载一次；依赖预热（`optimizeDeps.entries` 约定探测）防首开优化器冷启动竞态。
 - **路径纪律（Linux/Windows 双兼容）**：一切文件路径经 `node:path` join/relative；file URL 一律 `pathToFileURL()` 正造——**禁盘符/正斜杠字面拼接**（`file://C:/…` 拼接串在跨平台是坑）；跨平台展示位（报告 file 字段）正斜杠化。
 - **env 纪律**：`/dev` 出口不读任何环境变量——开关/端口/路径全部由配置传值；逃生口（如 `enabled:false`）归调用方组合。
@@ -49,7 +49,7 @@ ling-cordis 是独立发布的 cordis 血统插件运行时 + `/dev` 开发工�
 | 运行时（Context/Fiber/事件/服务/Timer/Schema/日志） | `src/core` `src/plugins` `src/schema` | `examples/hello`（`pnpm smoke`） |
 | 载体内核 runDevApp + RPC 空壳 | `src/dev/app.ts` `src/dev/rpc.ts` | `examples/dev-app`（`pnpm demo` / `demo:check`） |
 | vite 内嵌 HMR + 客户端源码面 + 框架装载器 | `src/dev/hmr.ts` `src/dev/app.ts` | `examples/hmr-react`（包内 `pnpm dev` / `pnpm build` / `pnpm start`，各带 `--check`） |
-| 面板产物构建件 buildClientBundle | `src/dev/client-bundle.ts` | `examples/hmr-react`（build:client 消费） |
+| 子应用产物构建件 buildClientBundle | `src/dev/client-bundle.ts` | `examples/hmr-react`（build:client 消费） |
 | 检查编排 runCheckScripts/checkRegisteredModules | `src/dev/check.ts` | `tests/dev-kit-absorb.spec.ts` |
 | 主题门引擎 themeGate | `src/dev/theme-gate.ts` | `tests/dev-kit-absorb.spec.ts`（bsh 树 theme-guard 为消费范本） |
 | 模块注册表 + 编译编排 + 接线助手 | `src/dev/registry.ts` `build.ts` `link.ts` | `examples/dev-app` / `examples/hmr-react/build.mjs` |

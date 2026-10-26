@@ -14,6 +14,20 @@
 - **Schema**——schemastery 构建器：声明式配置模式、standard-schema v1 接口、`Volatile` 稳定引用配置。
 - **控制台日志**——分级输出、着色、diff 后缀、按名取色。
 
+## 名词解释（统一说法）
+
+| 名词 | 定位 |
+| --- | --- |
+| **宿主壳**（host） | 常驻浏览器外壳页（`index.html`+装载器）——只提供容器与装载面，不含业务界面 |
+| **子应用**（subapp） | 被装载的**物**：一个业务包的浏览器半区（包自带 client 产物，一个 JS 文件），经子应用协议注册进宿主并自行挂载 UI。对位 qiankun 子应用 / VS Code webview |
+| **座位**（slot） | 宿主侧**挂载位**=装载到的**位**（dsh 宿主的子应用/座位体系）：子应用挂到页面哪个位置由座位定。子应用与座位是两个名词，勿混称 |
+| **子应用协议** | 注册面 `window.__ModuleLoader__.load({id, factory})` + factory 交出 `{inject, apply}` 的激活约定 |
+| **子应用键** | ling.config.mjs 模块条目的 `client.key`——子应用的装载名与 `/packages` 通道键，自动装载键序的唯一来源 |
+| **装载器** | 框架路由 `/__ling/boot.js`：装载面缺省实现 + `lingLoadSubapps`（自持装载宿主用） |
+| **自动装载** | 框架路由 `/__ling/main.js`：装载器 + 按模块清单键序自动装载，标准项目宿主页一行引它 |
+| **`/packages` 通道** | 子应用下发口：dev 态发源码 shim（HMR 生效），产物态发 `client/client.js` |
+| **壳/子应用产物** | `dist/`=vite build 出的宿主页静态资产；`client/client.js`=`buildClientBundle` 出的子应用注册器（均不入库） |
+
 ## 架构分层
 
 四层——**你只写最顶层，其余三层都在包里**：
@@ -171,39 +185,29 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 
 ### 前端 HMR（vite 内嵌，同进程单端口）
 
-`hmr` 一行 + 宿主页两行，就是全部接入：
+`hmr` 一行 + 宿主页一行，就是全部接入（术语见「名词解释」）。
 
-- **配置侧**：`hmr: { cwd: <vite 工程根>, react: true }`——框架从 cwd 自备
-  `@vitejs/plugin-react`（对等件契约：缺席/越界拒启），内联合成 `base:'/app/'`
-  与依赖预热（约定探测 `src/client/index.tsx|.ts`），**简单使用方零 vite.config**；
-  复杂使用方（`@ling/*` 别名族）自带 `vite.config.ts` 自然合并——此时勿设
-  `react:true`（插件双开=重复注册）。
-- **宿主页侧**（ling-web 形态=标准项目形态）：`index.html` 只引 module 入口
-  `<script type="module" src="/src/shell.ts">`；`shell.ts`（六行同款，逐件作用见
-  下节「标准项目结构」）运行时动态 import `/__ling/boot.js` 再
-  `lingLoadPanels(['my-plugin/client.js'])`。零构建宿主页可用两行式：
-  `<script src="/__ling/boot.js"></script>` + 内联
-  `<script>lingLoadPanels(['键'])</script>`——框架装载器内置面板协议装载面
-  （`window.__ModuleLoader__.load({id, factory})` 缺省实现，宿主已有自持装载器
-  则不覆盖）与运行时动态导入正路，两种形态同一装载面。**勿用**
-  `<script src="/packages/…">` 或静态 `import` 引面板：dev 态 vite html 转换会
-  给根相对 URL 前缀 base（`/app/packages/*` 已做别名兜底），内联 module 会被抽成
-  html-proxy 而中间件态不被 vite 认领。
-- **面板侧**：注册表条目带 `client: { key }` 且包内有约定入口
-  （`src/client/index.tsx|.ts`）→ dev 态 `/packages/<key>` 改发 ESM 转接 shim
-  （浏览器经 `/app/@fs/` 直拉源码，React Fast Refresh 生效）；产物态同键原样产物。
-- **语义注意**（真机实证钉）：①组件与 `apply`/`inject` 协议导出须分模块——混出
-  模块热更走重挂载（丢状态）；②React `StrictMode` 会让装载后**首次**热更重挂载
-  一次（其后正常）；③依赖预热缺席时首开会撞 vite 优化器冷启动竞态（约定探测即
-  为此默认开）。
+- **配置侧**：`hmr: { cwd: <vite 工程根>, react: true }`——简单使用方零
+  vite.config（框架自备 `@vitejs/plugin-react`、合成 `base:'/app/'` 与依赖预热）；
+  自带 `vite.config.ts` 的复杂使用方不设 `react:true`（插件双开禁）。
+- **宿主页侧**：`index.html` 只引一行 `<script src="/__ling/main.js"></script>`
+  （子应用键序=ling.config.mjs 模块清单）。自持装载宿主（如 ling-web client-kernel）
+  改用两行式：`<script src="/__ling/boot.js">` + 内联
+  `<script>lingLoadSubapps(['键'])</script>`。**禁**直引 `/packages/*`、内联
+  `type="module"`、静态 `import` 框架脚本。
+- **子应用侧**：模块条目带 `client: { key }` 且包内有约定入口
+  （`src/client/index.tsx|.ts`）——dev 态 `/packages/<key>` 直供源码（HMR 生效），
+  产物态同键发 `client/client.js`。
+- **语义规约**：①组件与 `apply`/`inject` 协议导出**分模块**（混出=热更丢状态）；
+  ②React `StrictMode` 下装载后首次热更重挂载一次（其后正常）。
 
 可跑样 [`examples/hmr-react`](./examples/hmr-react)——ling-web 形态（标准
 `vite.config.ts` + 项目标配三命令，包内 `pnpm install --ignore-workspace` 后）：
 
 | 命令 | 角色 |
 | --- | --- |
-| `pnpm dev` | 开发环境（HMR）：vite 内嵌同进程单端口起服，开 `/app/` 改 `src/client/DemoPanel.tsx` 即时热更；`--check` 跑 4 项自检 |
-| `pnpm build` | 编译产物两件：壳 `dist/`（vite build）+ 面板 `client/client.js`（框架件 `buildClientBundle` 包成面板协议注册器） |
+| `pnpm dev` | 开发环境（HMR）：vite 内嵌同进程单端口起服，开 `/app/` 改 `src/client/DemoView.tsx` 即时热更；`--check` 跑 5 项自检 |
+| `pnpm build` | 编译产物两件：壳 `dist/`（vite build）+ 子应用 `client/client.js`（框架件 `buildClientBundle` 包成子应用协议注册器） |
 | `pnpm start` | 产物启动：吃 build 产物、无 vite，同一页面同一装载面；`--check` 自检 |
 
 另一消费范本=`ling-harness-runner`（容器形态：与 sample 同款三命令与源码直载
@@ -212,29 +216,23 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 
 ### 构建与检查（同样一行接入）
 
-- **面板产物**：`buildClientBundle({ entry, id })`——esbuild 打包面板源码为单文件
-  cjs 并包成**面板协议注册器**（charset/require 垫片/装载面全内建；esbuild 是
-  使用方自备对等件，缺席 fail loud）；产物位缺省 `<包>/client/client.js`。
-- **构建编排**：`buildRegisteredModules({ registry, rootDir, carrier })`——注册表
-  逐包跑 `build:client`，外加载体目标（壳 `vite build` 出 dist）；
-  `examples/hmr-react` 的 `pnpm build` 即整链范本（面板+壳双目标）。
+- **子应用产物**：`buildClientBundle({ entry, id })`——esbuild 打包成子应用协议注册器，
+  产物位缺省 `<包>/client/client.js`（esbuild 使用方自备）。
+- **构建编排**：`buildRegisteredModules({ registry, rootDir, carrier })`——逐包
+  `build:client` + 载体壳目标（`vite build`）；范本=`examples/hmr-react` 的 `pnpm build`。
 - **类型检查编排**：`runCheckScripts({ targets })` / `checkRegisteredModules`——
-  逐包跑 `check` 脚本、全景聚合（败不抛，报告 ok/failed 携退出码）。
-- **主题门引擎**：`themeGate({ tokenSheets, bundles, allowedVars, allowedPrefixes,
-  skipBundleE3Prefixes, strict })`——E1 幽灵 token / E2 主题名硬编码 / E3 浅底
-  WARN / strict 硬编码色；`stripCommentsLine` 与 `printThemeGateResult` 一并出口
-  供消费方自持严扫复用（bsh 树 theme-guard 即消费范本：策略白名单本地、引擎框架）。
-- **路径纪律**：全部 `node:path` / `pathToFileURL`（Linux/Windows 双兼容，禁盘符
-  字面拼接）；产物启动形态范本=`ling-harness-runner`（`pnpm dev/build/start` 三标配）。
+  逐包跑 `check` 脚本、聚合报告（败不抛）。
+- **主题门**：`themeGate({ tokenSheets, bundles, allowedVars, allowedPrefixes,
+  skipBundleE3Prefixes, strict })`——E1 幽灵 token / E2 主题名硬编码 / E3 浅底 /
+  strict 硬编码色；`stripCommentsLine` / `printThemeGateResult` 一并出口（消费
+  范本=bsh 树 theme-guard）。
+- **路径规约**：一律 `node:path` / `pathToFileURL`（Linux/Windows 双兼容），禁盘符
+  字面拼接。
 
-**网关是空壳，一切策略都是你的层。** `createRpcServer` 只做 koa 式洋葱组合——
-零路由假设、零协议形状、零自动挂载。显式排层组合：包内机械件（`jsonResponder`
-——最外层应答汇；`faceInvoker`——最内层 `POST /api/<ns>/<method>` 分派+按名
-绑参），中间夹你的业务层（auth 三端点、会话门、审计、日志）。**层序即语义**：
-审计件排在 invoker 之外=发送前改写 value 的最后一站；嵌套天然支持（ALS 型
-请求上下文传播=中间件包 `next()`）。层对象可挂 `onInit`/`onReady`/`onDestroy`，
-经 `createRpcFace` 与 `runDevApp` 挂件槽派发。`examples/dev-app` 里整套 auth
-三端点+会话门是演示自持的 ~40 行中间件——这就是策略件应有的形态。
+**网关是空壳**：`createRpcServer` 只做洋葱组合——层序=`jsonResponder`（最外应答
+汇）→ 你的业务层（auth 三端点/会话门/审计/日志）→ `faceInvoker`（最内
+`POST /api/<ns>/<method>` 分派+按名绑参）；层对象可挂 `onInit`/`onReady`/
+`onDestroy`。范本=`examples/dev-app` 自持的 ~40 行 auth+会话门中间件。
 
 ### 标准项目结构（ling-web 形态）
 
@@ -247,17 +245,16 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 <包根>/
 ├── ling.config.mjs        # 装配声明（唯一组合源）：模块清单+相表；dev=嵌 HMR，产物态=吃 dist 静态
 ├── boot.mjs               # 启动器：import 配置 → runDevApp；dev/产物两态共用；--check 自检即退
-├── build.mjs              # pnpm build 入口：viteBuild 出壳 dist/ + buildClientBundle 出面板产物
+├── build.mjs              # pnpm build 入口：viteBuild 出壳 dist/ + buildClientBundle 出子应用产物
 ├── vite.config.ts         # 标准 vite 配置（base '/app/' + react 插件）——复杂使用方必带，简单使用方可省
-├── index.html             # 宿主页：唯一职责 = 容器 #root + <script type="module" src="/src/shell.ts">
+├── index.html             # 宿主页：唯一职责 = 容器 #root + <script src="/__ling/main.js">（子应用装载收归框架）
 ├── src/
-│   ├── shell.ts           # 浏览器壳入口（六行同款）：运行时拉框架装载器 + 点名面板键（详见表后）
 │   └── client/
-│       ├── index.tsx      # 面板协议出口 export { inject, apply }——/packages 源码面约定入口
-│       └── DemoPanel.tsx  # 纯 React 组件与业务源码（与协议出口分文件 = Fast Refresh 保状态）
+│       ├── index.tsx      # 子应用协议出口 export { inject, apply }——/packages 源码面约定入口
+│       └── DemoView.tsx  # 纯 React 组件与业务源码（与协议出口分文件 = Fast Refresh 保状态）
 ├── dist/                  # 【产物·不入库】壳静态资产（vite build 产出；产物态 staticApp 服务根）
 ├── client/
-│   └── client.js          # 【产物·不入库】面板协议注册器（buildClientBundle 产出；产物态 /packages 通道）
+│   └── client.js          # 【产物·不入库】子应用协议注册器（buildClientBundle 产出；产物态 /packages 通道）
 └── package.json           # 三命令标配 dev/build/start + 对等件 devDeps（vite/react/esbuild/tsx）
 ```
 
@@ -267,24 +264,15 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 | --- | --- | --- |
 | `ling.config.mjs` | 唯一组合源：模块清单（id/phase/client/mount）、dev 态 `hmr` 一行、产物态 `staticApp` 切换 | 路径=约定，内容=你的 |
 | `boot.mjs` | 启动器：读配置 → `runDevApp`；`--check` 自检即退 | 同上 |
-| `build.mjs` | `pnpm build` 入口：壳+面板双目标编译 | 同上 |
+| `build.mjs` | `pnpm build` 入口：壳+子应用双目标编译 | 同上 |
 | `vite.config.ts` | 标准 vite 配置（`base '/app/'`+react 插件）；简单使用方可省（`hmr.react:true` 框架内联合成） | 可选件 |
-| `index.html` | 宿主页：`#root` 容器+引 shell.ts；**勿**写装载逻辑或直引面板 | 唯一 html，入构建图 |
-| `src/shell.ts` | 浏览器壳入口：六行同款触发器（见下段），键列=本页面板 | 路径=约定，键列=你的 |
-| `src/client/index.tsx` | 面板协议出口 `export { inject, apply }`；**禁**与组件混出（混出热更走重挂载丢状态） | 约定入口 |
+| `index.html` | 宿主页：`#root` 容器+一行经典 script 引 `/__ling/main.js`；**勿**直引子应用或内联装载逻辑 | 唯一 html，入构建图 |
+| `src/client/index.tsx` | 子应用协议出口 `export { inject, apply }`；**禁**与组件混出（混出热更走重挂载丢状态） | 约定入口 |
 | `src/client/*.tsx` | 纯组件与业务源码——热更保状态的本体 | 你的 |
-| `dist/`、`client/client.js` | 构建产物两件（壳/面板） | 产物，不入库 |
+| `dist/`、`client/client.js` | 构建产物两件（壳/子应用） | 产物，不入库 |
 
-**`src/shell.ts` 定位**（为何装载动作必须由它承担，而不是写进 `index.html`）：
-要躲开三个真机实证的 vite 坑——①根相对 `<script src>` 被 vite html 转换加
-base 前缀（→404）；②内联 `type="module"` 被抽成 html-proxy、中间件态无人认领
-（→500）；③源码里写死的静态 `import '/__ling/boot.js'` 会被 vite import 分析
-改写。正路=「vite 根内本地模块（进构建图、dev 态同路径直载、React 前导自动注入
-html）+ 运行时动态 import（`new Function` 逃逸，运行时 URL 不进构建图）」——
-`shell.ts` 就是这个最小载体：先运行时拉 `/__ling/boot.js`（框架路由）拿到
-`lingLoadPanels`，再点名本页面板键。所有消费者逐字同款、仅键列不同；装载器
-本体（`window.__ModuleLoader__` 缺省实现+`lingLoadPanels`）在框架侧，消费者零
-装载逻辑。零构建宿主页不走 shell.ts，直接用上一节的两行式——两种形态同一装载面。
+**装载规约**：宿主页装载接线只有一行 `<script src="/__ling/main.js">`；子应用键序
+唯一来源=ling.config.mjs 模块清单 `client.key`（packagesExtras 共享件不自动装载）。
 
 ## 模块
 

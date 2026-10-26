@@ -32,11 +32,11 @@ export default defineApp({
   modules: [
     // 纯 client 登记（无 spec=不挂宿主插件）：dev 态 /packages/demo → 源码面 ESM shim；
     // 产物态同键 → client/client.js 产物（clientTable 缺省路径）
-    { id: 'hmr-react', phase: 'only', note: 'HMR 演示面板（/packages/demo）', client: { key: 'demo' } },
+    { id: 'hmr-react', phase: 'only', note: 'HMR 演示子应用（/packages/demo）', client: { key: 'demo' } },
   ],
   onReady: ({ port }) => {
     console.log(product
       ? `[hmr-demo] 产物形态就绪 http://127.0.0.1:${port}/app/（client/client.js 产物通道，无 vite）`
-      : `[hmr-demo] 浏览器打开 http://127.0.0.1:${port}/app/，编辑 src/client/DemoPanel.tsx 看热更（不刷新、计数不丢）`)
+      : `[hmr-demo] 浏览器打开 http://127.0.0.1:${port}/app/，编辑 src/client/DemoView.tsx 看热更（不刷新、计数不丢）`)
   },
 })

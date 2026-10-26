@@ -283,10 +283,48 @@ describe('runDevApp', () => {
     expect(plain.headers.get('content-type')).toContain('text/javascript')
     const body = await plain.text()
     expect(body).toContain('__ModuleLoader__')
-    expect(body).toContain('lingLoadPanels')
+    expect(body).toContain('lingLoadSubapps')
     // 同源：两路由字节一致
     expect(await prefixed.text()).toBe(body)
     await app.dispose()
+  })
+
+  it('子应用自动装载路由：/__ling/main.js = 装载器+ling.config 键序自动装载（src/shell.ts 退役件）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    roots.push(root)
+    const port = await freePort()
+    const app = await runDevApp({
+      rootDir: root,
+      port,
+      phases: ['core', 'tail'],
+      modules: [
+        { id: 'pkg-a', phase: 'core', client: { key: 'pkg-a/client.js' } },
+        { id: 'pkg-b', phase: 'tail', client: { key: 'pkg-b/client.js' } },
+        { id: 'no-face', phase: 'tail' },
+      ],
+      packagesExtras: { 'shared/client.js': join(root, 'shared', 'client', 'client.js') },
+    })
+    apps.push(app)
+    const base = `http://127.0.0.1:${port}`
+    const plain = await fetch(`${base}/__ling/main.js`)
+    const prefixed = await fetch(`${base}/app/__ling/main.js`)
+    expect(plain.status).toBe(200)
+    expect(prefixed.status).toBe(200)
+    const body = await plain.text()
+    // 装载器本体在场 + 按 client 键登记序自动装载；无 client 条目与 extras 共享键不掺入
+    expect(body).toContain('__ModuleLoader__')
+    expect(body).toContain('window.lingLoadSubapps(["pkg-a/client.js","pkg-b/client.js"])')
+    expect(body).not.toContain('shared/client.js')
+    expect(await prefixed.text()).toBe(body)
+    await app.dispose()
+    // 无 client 条目应用：main.js 退化为纯装载器（无自动装载调用行）
+    const port2 = await freePort()
+    const app2 = await runDevApp({ rootDir: root, port: port2, phases: ['only'], modules: [] })
+    apps.push(app2)
+    const bare = await fetch(`http://127.0.0.1:${port2}/__ling/main.js`)
+    expect(bare.status).toBe(200)
+    expect(await bare.text()).not.toContain('window.lingLoadSubapps([')
+    await app2.dispose()
   })
 
   it('/app/packages/* 别名（dev 态坑吸收）：base 前缀形态回源码面 shim；产物态不别名（404 不误吞）', async () => {

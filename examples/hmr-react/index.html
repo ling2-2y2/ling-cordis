@@ -11,8 +11,11 @@
   </head>
   <body>
     <div id="root">装载中（/packages/demo 拉取中）……</div>
-    <!-- ling-web 形态 module 入口：dev=vite 直载（React 前导自动注入）、
-         构建=进 dist 资产；面板装载正路在 src/shell.ts（运行时 URL 免改写坑） -->
-    <script type="module" src="/src/shell.ts"></script>
+    <!-- 子应用装载收归框架（2026-10-26 用户令「shell.ts 坏味道优化掉、配置/动作统一
+         收归 ling.config.mjs」）：一行经典 script——键序=ling.config.mjs 模块清单
+         client.key；dev 态经 vite base 前缀 /app/__ling/main.js 框架同源应答，
+         React 前导由 plugin-react 的 transformIndexHtml 无条件注入 html 管线；
+         构建态 vite build 对经典外链原样保留 -->
+    <script src="/__ling/main.js"></script>
   </body>
 </html>

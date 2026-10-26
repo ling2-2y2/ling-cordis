@@ -1,7 +1,7 @@
 /**
- * 面板产物构建件（2026-10-26 用户令「build 过程收归 ling-cordis」）——消费方
- * （ling-web 形态多面板平台的各面板包）不再手写 esbuild 包装：本件打包
- * `src/client` 源码入口为单文件 cjs 产物，并包成**面板协议注册器**
+ * 子应用产物构建件（2026-10-26 用户令「build 过程收归 ling-cordis」）——消费方
+ * （ling-web 形态多子应用平台的各子应用包）不再手写 esbuild 包装：本件打包
+ * `src/client` 源码入口为单文件 cjs 产物，并包成**子应用协议注册器**
  * （`window.__ModuleLoader__.load({id, factory})`——与 dev 态 ESM 转接 shim 同
  * 一装载面，宿主页 dev/产物两形态零改动）。
  * esbuild 是使用方的对等件（从 entry 所在包自备解析；缺席/越界 fail loud——
@@ -17,9 +17,9 @@ import { pathToFileURL } from 'node:url'
 export interface ClientBundleOptions {
   /** 源码入口（.tsx/.ts/.js；esbuild 与产物 outfile 均按其所在包定位）。 */
   entry: string
-  /** 产物输出路径（缺省 <entry 包>/client/client.js——面板产物约定位）。 */
+  /** 产物输出路径（缺省 <entry 包>/client/client.js——子应用产物约定位）。 */
   outfile?: string
-  /** 面板协议注册 id（装载面登记名）。 */
+  /** 子应用协议注册 id（装载面登记名）。 */
   id: string
   /** esbuild 透传覆盖（如 external/format 细调）。 */
   esbuild?: Record<string, unknown>
@@ -28,7 +28,7 @@ export interface ClientBundleOptions {
 }
 
 /** 内联 require 垫片（零外部依赖时永不触达；真外置依赖时诚实报错）。 */
-const REQUIRE_SHIM = "typeof require === 'function' ? require : function (id) { throw new Error('面板产物外置依赖未内联: ' + id); }"
+const REQUIRE_SHIM = "typeof require === 'function' ? require : function (id) { throw new Error('子应用产物外置依赖未内联: ' + id); }"
 
 /** 从文件/目录向上找最近的 package.json 所在目录（消费包根锚——esbuild 对等件界）。 */
 function nearestPackageRoot(from: string): string {
@@ -41,7 +41,7 @@ function nearestPackageRoot(from: string): string {
   }
 }
 
-/** 构建面板产物（返回产物字节数）。 */
+/** 构建子应用产物（返回产物字节数）。 */
 export async function buildClientBundle(options: ClientBundleOptions): Promise<number> {
   // esbuild 对等件解析：锚=入口向上最近的 package.json（消费包根；测试夹具=仓根）
   const require = createRequire(join(options.entry, 'package.json'))
@@ -76,7 +76,7 @@ export async function buildClientBundle(options: ClientBundleOptions): Promise<n
     ...options.esbuild,
   })
   const code = result.outputFiles[0]?.text ?? ''
-  const banner = options.banner ?? '// 面板产物（ling-cordis buildClientBundle 生成；dev 态此文件不被消费——/packages 源码面直供）'
+  const banner = options.banner ?? '// 子应用产物（ling-cordis buildClientBundle 生成；dev 态此文件不被消费——/packages 源码面直供）'
   const wrapped = [
     banner,
     '(function () {',
@@ -92,6 +92,6 @@ export async function buildClientBundle(options: ClientBundleOptions): Promise<n
   mkdirSync(join(outfile, '..'), { recursive: true })
   writeFileSync(outfile, wrapped)
   // 日志报真实落盘位（防缺省路径推导变化时日志骗人——实证教训）
-  console.log(`[buildClientBundle] 面板产物已生成 ${outfile}（${Math.round(Buffer.byteLength(wrapped) / 1024)} KB）`)
+  console.log(`[buildClientBundle] 子应用产物已生成 ${outfile}（${Math.round(Buffer.byteLength(wrapped) / 1024)} KB）`)
   return Buffer.byteLength(wrapped)
 }

@@ -136,25 +136,31 @@ export function registryOf(config: Pick<DevAppConfig, 'phases' | 'modules'>): Mo
 const DEFAULT_ASSET_EXT = /^[\w.-]+\.(js|mjs|css|map|png|jpg|jpeg|svg|woff2?|ttf|ico|json|wasm)$/u
 
 /**
- * 框架装载器（宿主页引导件，2026-10-26 用户令「坑知识进框架」）——宿主页引两行即得
- * 面板源码面 HMR：`<script src="/__ling/boot.js"></script><script>lingLoadPanels(['键'])</script>`。
+ * 框架装载器（宿主页引导件，2026-10-26 用户令「坑知识进框架」）——装载面本体：
+ * `window.__ModuleLoader__.load({id, factory})` 缺省实现（宿主已有自持装载器
+ * （如 ling-web client-kernel）则不覆盖）+ `lingLoadSubapps(keys)` 运行时动态导入
+ * 正路。标准项目形态宿主页只引一行 `<script src="/__ling/main.js">`（本件+
+ * 按 ling.config.mjs 模块清单 client 键序自动装载——消费者零壳文件，见路由段
+ * LING_MAIN_JS）；零构建/自持装载宿主用两行式：`<script src="/__ling/boot.js">`
+ * + 内联 `<script>lingLoadSubapps(['键'])</script>`。
  * 固化的坑知识（ling-harness-runner 最小集合真机实证）：
- * ①宿主页引面板勿用 `<script src="/packages/…">` 或静态 `import`——dev 态 vite html
+ * ①宿主页引子应用勿用 `<script src="/packages/…">` 或静态 `import`——dev 态 vite html
  *   转换会给根相对 URL 前缀 base（/app/packages/*→404），内联 module 会被抽成
  *   html-proxy 而中间件态不被 vite 认领（500）——正路=运行时动态 import（本件内置）。
- * ②面板协议装载面=window.__ModuleLoader__.load({id, factory})——宿主已有自持装载器
- *   （如 ling-web client-kernel）则不覆盖，仅补缺省实现。
+ * ②React Fast Refresh 前导由 @vitejs/plugin-react 的 transformIndexHtml 无条件注入
+ *   html 转换管线（与 html 是否有 module 入口无关）——宿主页纯经典 script 引
+ *   main.js 不影响热更链（实证于插件源码 transformIndexHtml 分支）。
  */
 const LING_BOOT_JS = [
   ';(() => {',
   "  if (typeof window === 'undefined') return",
   '  function showError(error) {',
-  "    console.error('[ling-cordis] 面板装载失败', error)",
+  "    console.error('[ling-cordis] 子应用装载失败', error)",
   "    const box = document.getElementById('root')",
   '    if (box) {',
   '      const pre = document.createElement(\'pre\')',
   "      pre.style.cssText = 'color:#b91c1c;white-space:pre-wrap;margin:24px;font:13px/1.6 monospace'",
-  "      pre.textContent = '面板装载失败：' + String((error && (error.stack || error.message)) || error)",
+  "      pre.textContent = '子应用装载失败：' + String((error && (error.stack || error.message)) || error)",
   '      box.replaceChildren(pre)',
   '    }',
   '  }',
@@ -169,7 +175,7 @@ const LING_BOOT_JS = [
   '    }',
   '  }',
   "  const rawImport = new Function('url', 'return import(url)')",
-  "  window.lingLoadPanels = (keys) => Promise.all(keys.map((key) => rawImport('/packages/' + key).catch(showError)))",
+  "  window.lingLoadSubapps = (keys) => Promise.all(keys.map((key) => rawImport('/packages/' + key).catch(showError)))",
   '})()',
   '',
 ].join('\n')
@@ -261,10 +267,20 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   const staticConf = config.staticApp
   const urlPrefix = staticConf?.urlPrefix ?? '/app'
   const packagesTable: Record<string, string> = { ...registry.clientTable(config.rootDir), ...config.packagesExtras }
-  // 客户端源码面表（dev 态 /packages 源码直供——2026-10-26 用户裁定①②「面板真
+  // 客户端源码面表（dev 态 /packages 源码直供——2026-10-26 用户裁定①②「子应用真
   // HMR、机制落 ling-cordis 框架」：注册表 client 键与 extras 键按约定自动发现
   // 源码入口，宿主零接线白拿；见下方 /packages 分派与 shim）
   const clientSourceTable = registry.clientSourceTable(config.rootDir, config.packagesExtras)
+
+  // 子应用自动装载件（2026-10-26 用户令「src/shell.ts 是架构坏味道，其配置/动作统一
+  // 收归 ling.config.mjs」）：/__ling/main.js = 装载器本体 + 按注册表 client 键
+  // 登记序自动 lingLoadSubapps——宿主页一行经典 script 即得，消费者壳文件退役零携带。
+  // 键序唯一来源=ling.config.mjs 模块清单的 client.key（shell.ts 重复声明键列即坏
+  // 味道根因，由此消灭）；packagesExtras 是共享件/纯资产（无挂载面），不参与自动装载。
+  const subappKeys = registry.all().filter((entry) => entry.client !== undefined).map((entry) => entry.client!.key)
+  const LING_MAIN_JS = subappKeys.length > 0
+    ? `${LING_BOOT_JS}window.lingLoadSubapps(${JSON.stringify(subappKeys)})\n`
+    : LING_BOOT_JS
 
   /** 宿主装载器全局名（框架契约——宿主内核须实现 window.__ModuleLoader__.load(
    * {id, factory}) 注册面与 exports.{inject,apply} 激活语义；ling-web client-kernel
@@ -318,6 +334,15 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     if (req.method === 'GET' && (pathname === '/__ling/boot.js' || pathname === `${urlPrefix}/__ling/boot.js`)) {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
       res.end(LING_BOOT_JS)
+      return
+    }
+
+    // 子应用自动装载通道（标准项目形态）：宿主页一行经典 script 引 /__ling/main.js
+    // ——装载器+ling.config.mjs 键序自动装载；双路由同源应答同 boot.js（dev 态 base
+    // 前缀形态；构建态 vite build 对经典 script 外链原样保留）
+    if (req.method === 'GET' && (pathname === '/__ling/main.js' || pathname === `${urlPrefix}/__ling/main.js`)) {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(LING_MAIN_JS)
       return
     }
 
