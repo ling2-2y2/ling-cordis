@@ -20,6 +20,9 @@ export default defineApp({
   // rootDir=上一级（examples/）：注册表 client 探测与产物表都按 join(rootDir, id) 找包目录
   rootDir: resolve(pkgDir, '..'),
   label: 'hmr-demo',
+  // 容器档（Dockerfile ENV HOST=0.0.0.0）由此行生效——env 由使用方薄壳读、框架零 env 纪律不破；
+  // 本地开发缺省回环地址不变
+  host: process.env.HOST ?? '127.0.0.1',
   port: Number(process.env.PORT ?? '8391'),
   // 两形态一切换就这两行（构建见 build.mjs；语义见 README「前端 HMR」）：
   // dev=vite 内嵌（本包自带 vite.config.ts——ling-web 形态消费者，React 插件在文件里，

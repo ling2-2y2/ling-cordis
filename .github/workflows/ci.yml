@@ -33,3 +33,33 @@ jobs:
           })"
       - run: pnpm smoke
       - run: pnpm demo:check
+
+  # 标准消费者模板回归（2026-10-26 架构评审 O2）：README 主推的项目三命令进机器门禁——
+  # 框架改动打碎模板时这里红（独立锁文件，--ignore-workspace 消费方保真形态）
+  example-hmr-react:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/hmr-react
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: examples/hmr-react/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      - run: pnpm dev --check      # dev 形态自检（vite 内嵌+源码面+装载器路由）
+      - run: pnpm build            # 壳 dist/ + 子应用 client/client.js
+      - run: pnpm start --check    # 产物形态自检
+
+  # 镜像构建门禁（2026-10-26 架构评审 O4）：Dockerfile 可构建性进 CI——本机/129 之外的
+  # 第三环境（GitHub runner 有 docker）验证；不 push（发布走 scripts/release.mjs 在 129 构建）
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ling-cordis/hmr-react:ci examples/hmr-react
