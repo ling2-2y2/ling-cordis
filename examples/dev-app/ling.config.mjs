@@ -61,8 +61,11 @@ export default defineApp({
   port: Number(process.env.PORT ?? 8390),
   redirects: { '/': '/app/' },
   staticApp: { root: dir('./web') },
-  // 想要前端热更？在 web/ 装 vite 后放开下一行（vite 缺席自动回落静态，不炸）：
-  // hmr: { cwd: dir('./web') },
+  // 前端热更（可选）：本目录自备 vite 后放开下一行（cd examples/dev-app &&
+  // pnpm install --ignore-workspace——vite 缺席=拒启 fail loud，2026-10-26 用户
+  // 裁定禁静默回落 dist；React Fast Refresh 零 vite.config 最小接入另见
+  // examples/hmr-react）：
+  // hmr: { cwd: dir('./web'), react: true },
 
   phases: ['base', 'core', 'tail'],
   modules: [

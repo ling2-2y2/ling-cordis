@@ -2,6 +2,35 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [2.3.0] - 2026-10-26
+
+### 新增（2026-10-26 用户令「坑知识进框架，简化使用方」吸收批）
+
+- **vite 配置内联合成**——`hmr` 配置新增 `react`/`base`/`entries` 三键：`react:true` 从使用方 cwd 自备加载 `@vitejs/plugin-react` 注入 Fast Refresh（同 vite 对等件契约，缺席/越界 fail loud），base 缺省 `'/app/'`，依赖预热入口缺省按 `src/client/index.tsx|.ts` 约定探测——**简单使用方零 vite.config 直享 HMR**；自带 vite.config.ts 的复杂使用方（别名族）不设 `react` 自然合并（插件双开=重复注册禁）。
+- **框架装载器 `/__ling/boot.js`**（`/app/__ling/boot.js` dev 态同源应答）：面板协议 `window.__ModuleLoader__.load({id, factory})` 缺省实现（宿主已有自持装载器不覆盖）+ `lingLoadPanels(keys)` 运行时动态导入正路——宿主页引两行即得面板源码面 HMR；固化两坑知识：勿用 `<script src="/packages/…">`（vite html 转换前缀 base→404）与静态 import（html-proxy 中间件态 500）。
+- **`/app/packages/*` dev 态别名**（坑吸收）：base 前缀形态别名回 /packages 源码面；产物态不吞（404 保持）。
+- `examples/hmr-react`——前端 HMR 最小示例（ling-web 形态：标准 `vite.config.ts` + 项目标配三命令 `pnpm dev`（HMR 环境）/`pnpm build`（编译面板+壳两产物）/`pnpm start`（产物启动），各带 `--check` 自检 4 项）；`examples/dev-app` 过时注释修正（「vite 缺席自动回落静态」与 fail-loud 裁定相反，勘正）。
+- README 双语翻旧账：`createViteHmrBridge` 子进程桥叙事**退役**（该形态已被 2.1.0 内嵌件取代）→ 内嵌件+「前端 HMR」新节（最小接入/语义注意：组件与协议导出分模块、StrictMode 首改重挂载、依赖预热）+「构建与检查」节（三收编件用法）。
+- **检查/构建收编三件**（2026-10-26 用户令「类型检查/样式检查/build 收归 ling-cordis、兼容 Linux 路径」）：`buildClientBundle`（面板产物注册器包装件，charset/require 垫片内建，esbuild 对等件契约）；`runCheckScripts`/`checkRegisteredModules`（逐包 check 脚本全景编排）；`themeGate` 引擎（E1/E2/E3/strict + `stripCommentsLine`/`printThemeGateResult` 出口）——bsh 树 theme-guard 换芯对拍全等（427 token/9 bundle/0 WARN/exit 0）。路径纪律全 node:path/pathToFileURL 双平台兼容。
+- `AGENTS.md` 立卷（用户令）：新件必说明 / 变更翻旧账 / 功能·说明·示例·文档四位一体 + 技术裁定指纹与能力面清单。
+- `examples/hmr-react` 补项目标配自持命令（`pnpm dev` HMR 环境 / `pnpm build` 编译 / `pnpm start` 产物启动；整链=面板 build:client+壳 build:shell 双目标防自递归）。
+- README 双语增「标准项目结构（ling-web 形态）」节（2026-10-26 用户令）：标准消费者包文件树+逐文件作用与属地表+`src/shell.ts` 定位段（三 vite 坑→「vite 根内本地模块+运行时动态 import」正路定谳，装载器本体在框架侧）；「宿主页侧」同步翻旧账（module 入口 shell.ts=标准项目形态、两行式=零构建形态，两种形态同一装载面）。
+- 测试 +8（react 内联合成 2/boot 路由与别名 2/themeGate 2/check 编排 1/buildClientBundle 1），总数 **103**。
+
+## [2.2.0] - 2026-10-26
+
+### 新增（2026-10-26 用户裁定①②「面板真 HMR、机制落 ling-cordis 底层」）
+
+- **客户端源码面**：dev 态（vite 内嵌在场）注册表 `client` 键改发 ESM 转接 shim——浏览器经 vite `/app/@fs/` 直拉包源码入口（TSX 转译+Fast Refresh+单 React=vite 图天然保证），宿主装载器吃到的 ESM 命名空间与产物 CJS exports 同形（`inject`/`apply` 面板协议）；`ModuleRegistry.clientSourceTable` 约定探测（`src/client/index.tsx`→`.ts`）+ packagesExtras 两级上翻纳入「无挂载面有面板产物」的包；产物态原样产物通道不变。
+
+## [2.1.0] - 2026-10-26
+
+### 新增（2026-10-26 用户裁定①②「单进程单端口；fail loud 禁静默回落 dist」）
+
+- **vite 内嵌件 `createViteEmbed`**（`src/dev/hmr.ts`）：以库形态从使用方 cwd 的 node_modules 加载 vite（`createRequire` 解析→动态 import），`createServer({ middlewareMode: true, hmr: { server } })` 同进程同端口——页面中间件由调用方挂进载体 HTTP 面、HMR WebSocket 升级挂载体自己的 http 服务，**无独立 vite 端口、无子进程**；`isInside` 包含守卫拒绝解析到项目外的 vite（vitest/NODE_PATH 注入防护）；缺席/初始化失败 reject（fail loud），逃生口 `enabled:false` 归调用方组合。
+- `runDevApp` 的 `hmr` 配置接线：`/app` 面全权交 vite（未认领=显式 500 `gateway/hmr-unclaimed`，禁回落 dist）；upgrade 兜底销毁前按（`sec-websocket-protocol`∈{vite-hmr,vite-ping} 且路径=base）放行 vite 认领的升级——真机探针实证不放行则热更握手被 `socket.destroy()` 掐死；healthz 附加 `hmr:'vite-embedded'` 观测位。
+- 替身测试基建 `tests/helpers/fake-vite.ts`（ws 所有权语义忠实模拟——被放行的升级 socket 由替身 close() 收编，否则 `server.close()` 永挂）。
+
 ## [2.0.0] - 2026-10-13
 
 ### 破坏性变更（迁移指南随条）

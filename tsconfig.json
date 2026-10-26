@@ -10,5 +10,6 @@
     "noEmit": true,
     "strict": false
   },
-  "include": ["src", "tests", "examples", "vitest.config.ts", "tsdown.config.ts"]
+  "include": ["src", "tests", "examples", "vitest.config.ts", "tsdown.config.ts"],
+  "exclude": ["examples/hmr-react/src"]
 }
