@@ -221,6 +221,15 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   const staticConf = config.staticApp
   const urlPrefix = staticConf?.urlPrefix ?? '/app'
   const packagesTable: Record<string, string> = { ...registry.clientTable(config.rootDir), ...config.packagesExtras }
+  // 客户端源码面表（dev 态 /packages 源码直供——2026-10-26 用户裁定①②「面板真
+  // HMR、机制落 ling-cordis 框架」：注册表 client 键与 extras 键按约定自动发现
+  // 源码入口，宿主零接线白拿；见下方 /packages 分派与 shim）
+  const clientSourceTable = registry.clientSourceTable(config.rootDir, config.packagesExtras)
+
+  /** 宿主装载器全局名（框架契约——宿主内核须实现 window.__ModuleLoader__.load(
+   * {id, factory}) 注册面与 exports.{inject,apply} 激活语义；ling-web client-kernel
+   * 现役即此形态，dev 态 ESM 命名空间与产物 CJS exports 同形直入）。 */
+  const CLIENT_LOADER_GLOBAL = 'window.__ModuleLoader__'
 
   // vite 内嵌件占位（同进程同端口；创建时序=端口卫兵之后、listen 之前——见下）
   let viteEmbed: ViteEmbed | undefined
@@ -292,7 +301,23 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
       return notFound()
     }
     if (req.method === 'GET' && pathname.startsWith('/packages/')) {
-      const file = packagesTable[decodeURIComponent(pathname.slice('/packages/'.length))]
+      const key = decodeURIComponent(pathname.slice('/packages/'.length))
+      // 客户端源码面（2026-10-26 用户裁定①②）：dev 态（vite 内嵌在场）且该键有
+      // 源码入口 → 改发 ESM 转接 shim——浏览器经 vite /app/@fs/ 直拉包源码入口
+      // （TSX 转译+Fast Refresh+单 React=vite 图天然保证），宿主装载器吃到的
+      // ESM 命名空间与产物 CJS exports 同形（inject/apply）。产物态/无源码面键
+      // （含纯资产 extras）=原样产物文件通道。
+      const source = viteEmbed !== undefined ? clientSourceTable[key] : undefined
+      if (source !== undefined) {
+        const fsUrl = `/app/@fs/${source.entry.replaceAll('\\', '/')}`
+        res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(
+          `import * as mod from ${JSON.stringify(fsUrl)}\n` +
+          `${CLIENT_LOADER_GLOBAL}.load({ id: ${JSON.stringify(source.id)}, factory: () => mod })\n`,
+        )
+        return
+      }
+      const file = packagesTable[key]
       if (file === undefined) return sendJson(res, 404, { ok: false, error: { code: 'gateway/bad-request', message: `包面文件未登记: ${pathname}` } })
       return serveStaticFile(file, res, notFound)
     }

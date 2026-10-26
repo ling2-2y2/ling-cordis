@@ -196,6 +196,65 @@ describe('runDevApp', () => {
     await app.dispose()
   }, 20000)
 
+  it('客户端源码面：dev 态注册表 client 键改发 ESM 转接 shim（@fs 源码入口+装载器注册）；纯资产 extras 仍走产物', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    roots.push(root)
+    // 假包：约定源码入口 src/client/index.ts + 产物 client/client.js
+    const pkg = join(root, 'fake-pkg')
+    mkdirSync(join(pkg, 'src', 'client'), { recursive: true })
+    mkdirSync(join(pkg, 'client'), { recursive: true })
+    writeFileSync(join(pkg, 'src', 'client', 'index.ts'), 'export const inject = []\nexport function apply() {}\n')
+    writeFileSync(join(pkg, 'client', 'client.js'), '// product bundle')
+    // 纯资产键：放在无源码约定的目录（不触发源码面发现）
+    mkdirSync(join(root, 'loose'), { recursive: true })
+    writeFileSync(join(root, 'loose', 'asset.js'), '// loose asset')
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const port = await freePort()
+    const app = await runDevApp({
+      rootDir: root,
+      port,
+      phases: ['only'],
+      modules: [{ id: 'fake-pkg', phase: 'only', client: { key: 'fake-pkg/client.js' } }],
+      packagesExtras: { 'asset-only.js': join(root, 'loose', 'asset.js') },
+      hmr: { cwd },
+    })
+    apps.push(app)
+    const base = `http://127.0.0.1:${port}`
+    // dev 态：client 键→ESM 转接 shim（@fs 源码入口 + 框架契约装载器注册 + 正确 id）
+    const shim = await fetch(`${base}/packages/fake-pkg/client.js`)
+    expect(shim.status).toBe(200)
+    const body = await shim.text()
+    expect(body).toContain('/app/@fs/')
+    expect(body).toContain('src/client/index.ts')
+    expect(body).toContain('"fake-pkg"')
+    expect(body).toContain('window.__ModuleLoader__.load')
+    expect(body).not.toContain('// product bundle')
+    // extras 纯资产键（无源码约定）=产物文件原样
+    expect(await fetch(`${base}/packages/asset-only.js`).then((r) => r.text())).toBe('// loose asset')
+    await app.dispose()
+  })
+
+  it('客户端源码面：产物态（无 vite 内嵌）client 键=产物文件原样（回归钉）', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    roots.push(root)
+    const pkg = join(root, 'fake-pkg')
+    mkdirSync(join(pkg, 'src', 'client'), { recursive: true })
+    mkdirSync(join(pkg, 'client'), { recursive: true })
+    writeFileSync(join(pkg, 'src', 'client', 'index.ts'), 'export const inject = []\n')
+    writeFileSync(join(pkg, 'client', 'client.js'), '// product bundle')
+    const port = await freePort()
+    const app = await runDevApp({
+      rootDir: root,
+      port,
+      phases: ['only'],
+      modules: [{ id: 'fake-pkg', phase: 'only', client: { key: 'fake-pkg/client.js' } }],
+    })
+    apps.push(app)
+    expect(await fetch(`http://127.0.0.1:${port}/packages/fake-pkg/client.js`).then((r) => r.text())).toBe('// product bundle')
+    await app.dispose()
+  })
+
   it('HMR 内嵌+依赖缺席：runDevApp 拒启（fail loud，不静默回落 dist）', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
     roots.push(root)
