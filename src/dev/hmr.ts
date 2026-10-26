@@ -128,7 +128,7 @@ export async function createViteEmbed(options: ViteEmbedOptions): Promise<ViteEm
       : `${options.cwd} 下解析不到 node_modules/vite`
     throw new Error(
       `vite 包缺席或越界（${hint}）——dev HMR 形态必须项目自备 vite 在场：` +
-        `先在该目录 pnpm install，或显式设 LING_WEB_HMR=0 走产物静态档`,
+        `先在该目录 pnpm install，或由调用方组合显式禁用内嵌走产物静态档（如 ling-web 形态的 LING_WEB_HMR=0；禁用开关归调用方，本框架不读 env）`,
     )
   }
   let vite: { createServer: (inline: ViteCreateServerOptions) => Promise<ViteDevServerLike> }

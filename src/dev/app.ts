@@ -75,6 +75,11 @@ export type DevHttpFace = DevHttpHandler | DevHttpFaceObject
 export interface DevAppConfig {
   /** 树根绝对路径（/packages 表与 carrier 的基準；配置体内 import.meta.dirname 取）。 */
   rootDir: string
+  /** 站点前缀单源（2026-10-26 架构评审 O3 裁定落地）：staticApp.urlPrefix 与
+   *  hmr.base 未显式设置时由此派生（urlPrefix=去尾杠形态、vite base=补尾杠形态），
+   *  尾斜杠容错归一（'/foo/' 与 '/foo' 同值）；缺省 '/app'。显式设置保留——
+   *  越具体越优先。防「前缀写两处、改一漏一=资产 404 静默错位」。 */
+  basePath?: string
   /** 日志前缀，缺省 'dev'。 */
   label?: string
   /** 监听端口，缺省 3000。 */
@@ -134,6 +139,12 @@ export function registryOf(config: Pick<DevAppConfig, 'phases' | 'modules'>): Mo
 }
 
 const DEFAULT_ASSET_EXT = /^[\w.-]+\.(js|mjs|css|map|png|jpg|jpeg|svg|woff2?|ttf|ico|json|wasm)$/u
+
+/** 前缀归一（O3 尾斜杠容错）：剥尾部斜杠；全斜杠输入归一为根 '/'。 */
+function normalizeBasePath(path: string): string {
+  const stripped = path.replace(/\/+$/u, '')
+  return stripped === '' ? '/' : stripped
+}
 
 /**
  * 框架装载器（宿主页引导件，2026-10-26 用户令「坑知识进框架」）——装载面本体：
@@ -265,7 +276,9 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   }
 
   const staticConf = config.staticApp
-  const urlPrefix = staticConf?.urlPrefix ?? '/app'
+  // 站点前缀单源（O3）：urlPrefix 与 vite base 未显式设置时都由 basePath 派生
+  const basePath = normalizeBasePath(config.basePath ?? '/app')
+  const urlPrefix = staticConf?.urlPrefix ?? basePath
   const packagesTable: Record<string, string> = { ...registry.clientTable(config.rootDir), ...config.packagesExtras }
   // 客户端源码面表（dev 态 /packages 源码直供——2026-10-26 用户裁定①②「子应用真
   // HMR、机制落 ling-cordis 框架」：注册表 client 键与 extras 键按约定自动发现
@@ -439,7 +452,8 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     viteEmbed = await createViteEmbed({
       cwd: config.hmr.cwd,
       httpServer: server,
-      base: config.hmr.base,
+      // O3 单源：hmr.base 缺省由 basePath 派生（补尾杠= vite base 形态）；显式设置优先
+      base: config.hmr.base ?? `${basePath}/`,
       react: config.hmr.react,
       entries: config.hmr.entries,
       logger: (level, message) => console[level](`[${label}] ${message}`),
