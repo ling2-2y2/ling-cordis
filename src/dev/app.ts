@@ -486,6 +486,10 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
       base: config.hmr.base ?? `${basePath}/`,
       react: config.hmr.react,
       entries: config.hmr.entries,
+      // 跨包源码面放行（2026-10-27 ling-web 真机 403 根因）：/packages 源码直供的
+      // 入口全在 rootDir 树内、常在 vite cwd（如 ling-web）之外——vite 缺省
+      // fs.allow 只盖 cwd，不显式放行=子应用源码 /app/@fs/ 全线 403
+      fsAllow: [config.rootDir],
       logger: (level, message) => console[level](`[${label}] ${message}`),
     })
     console.log(`[${label}] vite HMR 内嵌就绪（同进程单端口 /app，无独立 vite 端口）`)

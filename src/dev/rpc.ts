@@ -188,11 +188,19 @@ export function createRpcServer(options: RpcServerOptions): DevHttpHandler {
   return assembleRpc(options).handle
 }
 
-/** 建网关挂件（对象形态）：ready/dispose 派发层生命周期；healthz 进健康检查。 */
-export function createRpcFace(options: RpcServerOptions & { healthz?: () => Record<string, unknown> }): DevHttpFaceObject {
+/** 建网关挂件（对象形态）：ready/dispose 派发层生命周期；healthz 进健康检查；
+ * upgrade 透传 ws 升级分派（DevHttpFaceObject 协议位——2026-10-27 /message/websocket
+ * 断连根修：工厂此前造不出协议自有的 upgrade 槽，消费方经工厂建 face 后无法暴露
+ * ws 升级路由，载体升级链走不到桥、连接被兜底销毁）。 */
+export function createRpcFace(options: RpcServerOptions & {
+  healthz?: () => Record<string, unknown>
+  /** ws 升级处理器（认领=true 止链；透传进 face 对象——runDevApp 升级链消费）。 */
+  upgrade?: DevHttpFaceObject['upgrade']
+}): DevHttpFaceObject {
   const { handle, layers } = assembleRpc(options)
   return {
     handle,
+    upgrade: options.upgrade,
     async ready() {
       for (const layer of layers) {
         if (typeof layer !== 'function') await layer.onReady?.()

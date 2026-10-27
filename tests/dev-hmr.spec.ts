@@ -103,6 +103,27 @@ describe('createViteEmbed', () => {
     expect(embed.claimsUpgrade({ url: '/app/src/main.tsx', headers: { 'sec-websocket-protocol': 'vite-hmr' } } as never)).toBe(false)
   })
 
+  it('fsAllow：显式传=server.fs.allow=[cwd,...fsAllow]（跨包源码面 403 根修）；缺席=不设 fs 键', async () => {
+    const cwd = createFakeViteProject()
+    roots.push(cwd)
+    const shell = createServer()
+    shells.push(shell)
+    await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
+    // 2026-10-27 ling-web 真机实证：/packages 源码直供把 vite cwd 之外的兄弟包源码
+    // 映射成 /app/@fs/ URL——vite 缺省 fs.allow 只盖 cwd（403 全线拒），
+    // fsAllow=runDevApp 传 rootDir 的显式放行通道。
+    const extra = join(cwd, '..')
+    const withFsEmbed = await createViteEmbed({ cwd, httpServer: shell, fsAllow: [extra] })
+    embeds.push(withFsEmbed)
+    const withFs = fakeViteLedger.lastOptions as { server: { fs?: { allow: readonly string[] } } }
+    expect(withFs.server.fs?.allow).toEqual([cwd, extra])
+    await withFsEmbed.dispose()
+    const bareEmbed = await createViteEmbed({ cwd, httpServer: shell })
+    embeds.push(bareEmbed)
+    const withoutFs = fakeViteLedger.lastOptions as { server: { fs?: { allow: readonly string[] } } }
+    expect(withoutFs.server.fs).toBeUndefined()
+  })
+
   it('dispose：vite server.close 被调（台账 closed+1）', async () => {
     const cwd = createFakeViteProject()
     roots.push(cwd)

@@ -75,6 +75,29 @@ describe('createRpcServer（空壳）', () => {
   })
 })
 
+// ── createRpcFace upgrade 槽透传（2026-10-27 /message/websocket 断连回归）────
+// 病灶：DevHttpFaceObject 协议定义了 upgrade 槽（app.ts 升级链只认此槽），但
+// createRpcFace 工厂不接收不透传——消费方（ling-dsh-common dev-gateway）经工厂
+// 建 face 后无法暴露 ws 升级分派，webServer 桥的 registerUpgrade 路由成死路，
+// 连接被载体兜底 socket.destroy() 掐死。修：工厂补齐自家协议槽位。
+describe('createRpcFace upgrade 槽透传（ws 断连回归钉）', () => {
+  it('传入 upgrade=face.upgrade 原样透传（认领 true/放行 false 分派语义保真）', () => {
+    const seen: string[] = []
+    const face = createRpcFace({
+      layers: [],
+      upgrade: (req) => { seen.push(req.url ?? ''); return (req.url ?? '').startsWith('/message/websocket') },
+    })
+    expect(face.upgrade, '工厂须透传 upgrade 槽（DevHttpFaceObject 协议位）').toBeTypeOf('function')
+    expect(face.upgrade?.(fakeReq('GET', '/message/websocket?token=t') as never, {} as never, Buffer.alloc(0))).toBe(true)
+    expect(face.upgrade?.(fakeReq('GET', '/other') as never, {} as never, Buffer.alloc(0))).toBe(false)
+    expect(seen).toEqual(['/message/websocket?token=t', '/other'])
+  })
+
+  it('未传 upgrade=face.upgrade 缺席（存量消费方零变化）', () => {
+    expect(createRpcFace({ layers: [] }).upgrade).toBeUndefined()
+  })
+})
+
 describe('jsonResponder + faceInvoker（机械件）', () => {
   function server(extra: RpcLayer[] = []) {
     return createRpcServer({ layers: [jsonResponder(), ...extra, faceInvoker({ faces: facesOf })] })

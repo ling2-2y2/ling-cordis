@@ -39,6 +39,12 @@ export interface ViteEmbedOptions {
    *  <cwd>/src/client/index.tsx → .ts。不预热时浏览器首访才发现 react 族裸依赖
    *  →优化器冷启动竞态 → 首开卡「装载中」（实证）。 */
   entries?: string[]
+  /** vite server.fs.allow 追加目录（cwd 自身恒在允许列）。跨包客户端源码面必传：
+   *  /packages 源码直供把 vite cwd（如 ling-web）之外的兄弟包源码入口映射成
+   *  /app/@fs/ URL——vite 缺省允许列只盖 cwd（workspace 根探测对兄弟包形态
+   *  不生效，2026-10-27 ling-web 真机实证 403），不显式放行=子应用源码全线
+   *  403、装载失败。 */
+  fsAllow?: readonly string[]
   /** 日志出口（缺省静默——库不刷屏）。 */
   logger?: (level: 'info' | 'warn' | 'error', message: string) => void
 }
@@ -49,7 +55,7 @@ interface ViteCreateServerOptions {
   base?: string
   plugins?: unknown[]
   optimizeDeps?: { entries: string[] }
-  server: { middlewareMode: true; hmr: { server: Server } }
+  server: { middlewareMode: true; hmr: { server: Server }; fs?: { allow: readonly string[] } }
 }
 
 /** vite dev server 的最小类型面（middlewares+close+config.base 三消费点）。 */
@@ -151,7 +157,12 @@ export async function createViteEmbed(options: ViteEmbedOptions): Promise<ViteEm
     base: options.base ?? '/app/',
     ...(reactPluginFactory !== undefined ? { plugins: [reactPluginFactory()] } : {}),
     ...(entries.length > 0 ? { optimizeDeps: { entries } } : {}),
-    server: { middlewareMode: true, hmr: { server: options.httpServer } },
+    // fs.allow 显式设=整列替换 vite 缺省（cwd 必须自带上，否则根内文件反被拒）
+    server: {
+      middlewareMode: true,
+      hmr: { server: options.httpServer },
+      ...(options.fsAllow !== undefined ? { fs: { allow: [options.cwd, ...options.fsAllow] } } : {}),
+    },
   }
   let viteServer: ViteDevServerLike
   try {
