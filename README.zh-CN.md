@@ -1,4 +1,4 @@
-# ling-cordis
+# ling-coris
 
 独立发布的 [cordis](https://github.com/koishijs/cordis) 血统 TypeScript 插件运行时：可组合的**上下文**、生命周期受管的**插件 Fiber**、带类型的**事件总线**、**依赖注入服务**、**定时器**混入、**Schema** 校验（schemastery）与控制台**日志**——单包 ESM 交付，安装即用。
 
@@ -39,13 +39,13 @@ flowchart TD
     MOD["业务插件模块<br/>跨模块：static inject + ctx.get<br/>（示例 demo1/demo2，或 34 条目的平台树）"]
     FE["浏览器 SPA"]
   end
-  subgraph L3["/dev 工具族——import '@ling2/ling-cordis/dev'"]
+  subgraph L3["/dev 工具族——import '@ling2/ling-coris/dev'"]
     KERNEL["runDevApp 载体内核<br/>env → Context → 分相挂载 → HTTP 面 → 有界停机"]
     GW["createRpcServer 空壳<br/>+ jsonResponder / faceInvoker 机械件<br/>策略住在你的业务层"]
     HMR["createViteEmbed vite 内嵌件<br/>同进程单端口 HMR<br/>（vite 为使用方对等件，可选）"]
     UTILS["ModuleRegistry · 编译编排 · 接线助手"]
   end
-  subgraph L2["运行时——import '@ling2/ling-cordis'"]
+  subgraph L2["运行时——import '@ling2/ling-coris'"]
     CORE["Context 树 · Fiber 生命周期 · 事件总线 · Service 依赖注入"]
     PLUGINS["Timer · LoggerConsole · schemastery"]
   end
@@ -78,14 +78,14 @@ flowchart TD
 ## 安装
 
 ```bash
-npm install @ling2/ling-cordis
-# 或：pnpm add @ling2/ling-cordis
+npm install @ling2/ling-coris
+# 或：pnpm add @ling2/ling-coris
 ```
 
 ## 快速上手
 
 ```ts
-import { Context, LoggerConsole, Service, Timer } from '@ling2/ling-cordis'
+import { Context, LoggerConsole, Service, Timer } from '@ling2/ling-coris'
 
 // 插件即服务：具名 'hello'，暴露为 ctx.hello
 class Hello extends Service {
@@ -118,7 +118,7 @@ await ctx.fiber.dispose() // 执行全部已登记的 effect
 不另开端口、不起子进程就获得前端 HMR（含 React Fast Refresh）：
 
 ```ts
-import { ModuleRegistry, buildRegisteredModules, createViteEmbed } from '@ling2/ling-cordis/dev'
+import { ModuleRegistry, buildRegisteredModules, createViteEmbed } from '@ling2/ling-coris/dev'
 
 // ① 一份注册表三处消费（挂载 / 静态表 / 编译）
 const registry = new ModuleRegistry(['core', 'tail'])
@@ -151,7 +151,7 @@ vite 只收它认领的 `/app` 页面与 HMR ws 升级。vite（与 `react:true`
 （`vite.config.ts` 式薄配置体验）：
 
 ```ts
-import { defineApp, runDevApp } from '@ling2/ling-cordis/dev'
+import { defineApp, runDevApp } from '@ling2/ling-coris/dev'
 
 const config = defineApp({
   rootDir: import.meta.dirname,
@@ -289,7 +289,7 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 
 标准消费者镜像的正典=[`examples/hmr-react/Dockerfile`](./examples/hmr-react/Dockerfile)
 （2026-10-26 架构评审 O4 + 裁-2/裁-3 裁定形态）：**多阶段**——构建期装全量 devDeps
-（vite/esbuild/plugin-react）并把三处演示形态相对 import 重写为 `@ling2/ling-cordis/dev`
+（vite/esbuild/plugin-react）并把三处演示形态相对 import 重写为 `@ling2/ling-coris/dev`
 包出口（与真实使用方一字不差）；运行期仅产物（`dist/`+`client/`）+钉版本框架包
 （`pnpm install --prod`），vite/esbuild/tsx 不进镜像。三件现成容器适配：`/healthz`
 内建路由配 `HEALTHCHECK`、SIGTERM 触发有界停机（`docker stop` 干净收敛）、`HOST=0.0.0.0`
@@ -297,11 +297,11 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 
 ```bash
 cd examples/hmr-react
-docker build -t ling-cordis/hmr-react:latest .          # 日常档（框架包= npm latest）
-docker build --build-arg LING_CORDIS_VERSION=2.3.0 \
-  -t ling-cordis/hmr-react:2.3.0 .                      # 钉版档（正式发布用）
+docker build -t ling-coris/hmr-react:latest .          # 日常档（框架包= npm latest）
+docker build --build-arg LING_CORIS_VERSION=2.3.0 \
+  -t ling-coris/hmr-react:2.3.0 .                      # 钉版档（正式发布用）
 docker run -d --name ling-hmr-react -p 8391:8391 \
-  -e HOST=0.0.0.0 ling-cordis/hmr-react:2.3.0            # 起容器（非 root 运行）
+  -e HOST=0.0.0.0 ling-coris/hmr-react:2.3.0            # 起容器（非 root 运行）
 ```
 
 发布流水线（裁-6：本地脚本编排、构建与验证在部署机完成，不走云端发布）：

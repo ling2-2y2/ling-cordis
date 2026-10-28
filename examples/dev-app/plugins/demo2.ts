@@ -5,7 +5,7 @@
  *
  * 跨模块调用链（浏览器只见一个面）：
  *   POST /api/demo2/report → demo2.report → ctx.get('demo1').double（模块间后端调用）
- * @module @ling2/ling-cordis/examples/dev-app/plugins/demo2
+ * @module @ling2/ling-coris/examples/dev-app/plugins/demo2
  */
 import { Service, type Context } from '../../../src/index.ts'
 import type { Demo1Api } from './demo1.ts'

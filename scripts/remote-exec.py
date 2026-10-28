@@ -77,7 +77,7 @@ def main():
             print(json.dumps({'ok': code == 0, 'code': code, 'stdout': o[-req.get('tail', 6000):], 'stderr': e[-2000:]}))
         elif op == 'put':
             import posixpath
-            # 远端父目录先建（sftp.put 不建目录——/opt/ling-cordis 首用即 ENOENT 实证）
+            # 远端父目录先建（sftp.put 不建目录——/opt/ling-coris 首用即 ENOENT 实证）
             rdir = posixpath.dirname(req['remote'])
             if rdir:
                 ssh.exec_command('mkdir -p %s' % rdir)

@@ -1,5 +1,5 @@
 /**
- * @ling2/ling-cordis 聚合入口——cordis 运行时单口出口。
+ * @ling2/ling-coris 聚合入口——cordis 运行时单口出口。
  *
  * 布局：`core/` 框架内核（Context/Fiber/Registry/Events/Service/Logger），
  * `kit/` 通用工具箱（cosmokit 血缘，含 Volatile 稳定引用配置机制），
@@ -8,7 +8,7 @@
  *
  * Timer / LoggerConsole 为 boot 装配件出口（程序化 `ctx.plugin()` 装配）；
  * schemastery 以默认导出再出口（callable Schema 工厂）。
- * @module @ling2/ling-cordis
+ * @module @ling2/ling-coris
  */
 export * from './core/index.ts'
 export { default as Timer } from './plugins/timer.ts'

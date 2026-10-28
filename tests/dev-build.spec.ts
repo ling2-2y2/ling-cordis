@@ -2,7 +2,7 @@
  * 编译编排回归——全量/指名/载体特名/skipCarrier/未注册与无产物报错/失败退出码透传。
  * 用临时目录假包（package.json 携构建脚本）实跑 npm run；成功脚本 node -v、
  * 失败脚本 node -e "process.exit(3)"（跨 shell 确定性退出码）。
- * @module @ling2/ling-cordis/tests/dev-build
+ * @module @ling2/ling-coris/tests/dev-build
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,7 +27,7 @@ function fakePkg(root: string, id: string, script: string, scriptName = 'build:c
 }
 
 function sampleRegistry(): { registry: ModuleRegistry; root: string } {
-  const root = mkdtempSync(join(tmpdir(), 'ling-cordis-build-'))
+  const root = mkdtempSync(join(tmpdir(), 'ling-coris-build-'))
   roots.push(root)
   fakePkg(root, 'm-a', 'node -v')
   fakePkg(root, 'm-b', 'node -v')

@@ -1,5 +1,5 @@
 /**
- * 主题 token 合规门引擎（通用件，2026-10-26 用户令「样式检查收归 ling-cordis」）——
+ * 主题 token 合规门引擎（通用件，2026-10-26 用户令「样式检查收归 ling-coris」）——
  * 消费方（如 bsh 树 theme-guard）只出**事实**（token 事实源 css、扫描面、机制变量
  * 白名单），引擎负责扫描与判定：
  * - E1 [ERROR] 幽灵 token：var(--X) 的 X 既非事实源定义、非本文件自定义、也不在白名单。
@@ -8,7 +8,7 @@
  * - strict：CSS 规则里其余硬编码色追加 WARN。
  * 路径纪律（Linux/Windows 双兼容）：全部经 node:path join/relative，跨平台展示位
  * （file 字段）一律正斜杠化；不拼盘符字面量、不走 shell。
- * @module @ling2/ling-cordis/dev/theme-gate
+ * @module @ling2/ling-coris/dev/theme-gate
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'

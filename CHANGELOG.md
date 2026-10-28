@@ -1,4 +1,8 @@
-# Changelog
+# 更新日志
+
+## 0.0.1（2026-10-28）
+
+- 更名发布：`@ling2/ling-cordis` → `@ling2/ling-coris`，npm 新包号自 0.0.1 起版（旧包 `@ling2/ling-cordis` 废弃标注指向本包）；GitHub/Gitee 仓同步更名 ling2-2y2/ling-coris、ling2/ling-coris。
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本语义遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 

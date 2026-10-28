@@ -62,4 +62,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t ling-cordis/hmr-react:ci examples/hmr-react
+      - run: docker build -t ling-coris/hmr-react:ci examples/hmr-react

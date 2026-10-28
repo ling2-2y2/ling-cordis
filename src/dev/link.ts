@@ -2,7 +2,7 @@
  * 物理层接线助手族——junction 清单与 shim 桥的机制化（树根 node_modules 真包
  * 解析：tsx 对 @ 开头 scoped 说明符不套 paths，运行时唯一解析通道）。
  * 数据（junction 清单/shim 出口表）由消费方持有，本模块只做幂等落盘。
- * @module @ling2/ling-cordis/dev/link
+ * @module @ling2/ling-coris/dev/link
  */
 import { existsSync, mkdirSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'

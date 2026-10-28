@@ -1,8 +1,8 @@
 # examples
 
 可直接跑的三个示例。仓内演示走源码相对路径（免构建直跑）；消费者视角把
-`'../../src/index.ts'` 换成 `'@ling2/ling-cordis'`、`'../../src/dev/index.ts'`
-换成 `'@ling2/ling-cordis/dev'` 即同款。
+`'../../src/index.ts'` 换成 `'@ling2/ling-coris'`、`'../../src/dev/index.ts'`
+换成 `'@ling2/ling-coris/dev'` 即同款。
 
 | 示例 | 一句话 | 运行 |
 | --- | --- | --- |

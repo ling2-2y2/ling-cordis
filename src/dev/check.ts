@@ -1,11 +1,11 @@
 /**
- * 检查编排（2026-10-26 用户令「类型检查收归 ling-cordis 简化项目配置」）——
+ * 检查编排（2026-10-26 用户令「类型检查收归 ling-coris 简化项目配置」）——
  * 与 build.ts 同族的子进程编排：逐目标在各自目录跑 `npm run <script>`（缺省
  * 'check'，消费方惯例如 `tsc --noEmit`），失败聚合不中断（与 build 的「任一
  * 失败即抛」不同——检查要的是全景报告）。
  * 路径纪律（Linux/Windows 双兼容）：cwd 用 node:path 绝对路径；spawn 恒走
  * shell（npm 在 Windows 是 .cmd）；不拼盘符字面量。
- * @module @ling2/ling-cordis/dev/check
+ * @module @ling2/ling-coris/dev/check
  */
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'

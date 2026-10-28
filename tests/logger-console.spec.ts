@@ -1,6 +1,6 @@
 /**
  * LoggerConsole 插件回归——装配、渲染输出与 colors:false 纯文本形态。
- * @module @ling2/ling-cordis/tests/logger-console
+ * @module @ling2/ling-coris/tests/logger-console
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, LoggerConsole, Timer } from '../src/index.ts'

@@ -1,7 +1,7 @@
 /**
- * 收编件回归（2026-10-26 用户令「类型检查/样式检查/build 收归 ling-cordis」）——
+ * 收编件回归（2026-10-26 用户令「类型检查/样式检查/build 收归 ling-coris」）——
  * themeGate 引擎判定面、runCheckScripts 编排、buildClientBundle 子应用产物包装器。
- * @module @ling2/ling-cordis/tests/dev-kit-absorb
+ * @module @ling2/ling-coris/tests/dev-kit-absorb
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,7 +18,7 @@ afterEach(() => {
 
 /** 铺一个主题门夹具（事实源 css+一个假 bundle），返回 {root, sheetDir, bundle}。 */
 function themeFixture(): { root: string, sheetDir: string, bundle: string } {
-  const root = mkdtempSync(join(tmpdir(), 'ling-cordis-theme-'))
+  const root = mkdtempSync(join(tmpdir(), 'ling-coris-theme-'))
   roots.push(root)
   const sheetDir = join(root, 'sheets')
   mkdirSync(sheetDir)
@@ -81,7 +81,7 @@ describe('themeGate 引擎', () => {
 
 describe('runCheckScripts 编排', () => {
   it('逐目标跑 npm run check：全景聚合（败不抛），ok/failed 退出码如实', () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-check-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-check-'))
     roots.push(root)
     const good = join(root, 'good')
     const bad = join(root, 'bad')
@@ -103,7 +103,7 @@ describe('buildClientBundle 子应用产物包装器', () => {
   it('打包源码入口→注册器产物：装载面收到 id+factory（factory 返回模块 exports）', async () => {
     // 夹具入口放在仓内 tests/fixtures（esbuild 对等件解析从此处向上达 cordis devDeps）
     const entry = join(import.meta.dirname, 'fixtures', 'client-bundle-entry.ts')
-    const outRoot = mkdtempSync(join(tmpdir(), 'ling-cordis-cb-'))
+    const outRoot = mkdtempSync(join(tmpdir(), 'ling-coris-cb-'))
     roots.push(outRoot)
     const outfile = join(outRoot, 'client', 'client.js')
     const bytes = await buildClientBundle({ entry, outfile, id: 'fixture-panel' })
@@ -128,7 +128,7 @@ describe('buildClientBundle 子应用产物包装器', () => {
 
   it('体积阈值 WARN（O6 多面板 React 共享防线）：超阈值提示 external 共享、缺省档不误报', async () => {
     const entry = join(import.meta.dirname, 'fixtures', 'client-bundle-entry.ts')
-    const outRoot = mkdtempSync(join(tmpdir(), 'ling-cordis-cb-warn-'))
+    const outRoot = mkdtempSync(join(tmpdir(), 'ling-coris-cb-warn-'))
     roots.push(outRoot)
     const outfile = join(outRoot, 'client', 'client.js')
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})

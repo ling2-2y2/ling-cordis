@@ -1,6 +1,6 @@
 /**
  * Fiber 生命周期回归——状态机、effect 清理、插件重载与错误面。
- * @module @ling2/ling-cordis/tests/fiber
+ * @module @ling2/ling-coris/tests/fiber
  */
 import { describe, expect, it } from 'vitest'
 import { Context, CordisError, FiberState, ValidationError } from '../src/index.ts'

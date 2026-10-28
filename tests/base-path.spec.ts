@@ -7,7 +7,7 @@
  * - 显式设置保留（越具体越优先）；
  * - 尾斜杠容错归一（'/foo/' 与 '/foo' 同值）；
  * - 不设 basePath=缺省 '/app'，行为与历史逐字节一致（含 /__ling 双路由前缀形态）。
- * @module @ling2/ling-cordis/tests/base-path
+ * @module @ling2/ling-coris/tests/base-path
  */
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -40,7 +40,7 @@ function freePort(): Promise<number> {
 
 /** 铺临时 SPA 静态根（index.html 可识别内容）。 */
 function spaRoot(content = '<html>spa-index</html>'): string {
-  const root = mkdtempSync(join(tmpdir(), 'ling-cordis-basepath-'))
+  const root = mkdtempSync(join(tmpdir(), 'ling-coris-basepath-'))
   roots.push(root)
   const web = join(root, 'web')
   mkdirSync(web)

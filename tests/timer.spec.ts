@@ -1,6 +1,6 @@
 /**
  * Timer 插件回归——timeout 双形态、节流、防抖、dispose 撤销语义。
- * @module @ling2/ling-cordis/tests/timer
+ * @module @ling2/ling-coris/tests/timer
  */
 import { describe, expect, it } from 'vitest'
 import { Context, Timer } from '../src/index.ts'

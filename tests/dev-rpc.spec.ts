@@ -3,7 +3,7 @@
  * faceInvoker 分派与绑参）、层生命周期（createRpcFace ready/dispose）、组合全景
  * （业务 auth+门 → responder → 审计件 → invoker，位置语义即洋葱序）。
  * req/res 用最小仿真件直调 handle（夹具时序：emit 须宏任务对齐真实 I/O）。
- * @module @ling2/ling-cordis/tests/dev-rpc
+ * @module @ling2/ling-coris/tests/dev-rpc
  */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'

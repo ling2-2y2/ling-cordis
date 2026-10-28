@@ -1,6 +1,6 @@
 /**
  * 演示插件——一个挂在 `ctx.hello` 上的最小服务。
- * @module @ling2/ling-cordis/examples/hello/face
+ * @module @ling2/ling-coris/examples/hello/face
  */
 import { Service, type Context } from '../../src/index.ts'
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ling-cordis 发布流水线（2026-10-26 裁-6 用户裁定形态）——本地脚本编排：
+ * ling-coris 发布流水线（2026-10-26 裁-6 用户裁定形态）——本地脚本编排：
  * **每个流程节点一个方法，串起来为一个自动流程**；不走 GitHub Actions 云端发布。
  *
  * 节点（单步可跑、全串 `all` 一发）：
@@ -16,7 +16,7 @@
  *
  * 旗标：--dry-run（publish/push 只打印不执行——外发动作保护）；--image-version <v>
  * （镜像钉版，缺省 latest 档=随 npm 最新走；全串 all 自动用 package.json 版本号）；
- * --remote-dir（129 工作目录，缺省 /opt/ling-cordis）。
+ * --remote-dir（129 工作目录，缺省 /opt/ling-coris）。
  *
  * env（探测序：本仓 .env → bsh 树根 .env，gitignored 不入库）：npmjs_access_token /
  * GitHub_user / GitHub_password / gitee_user / gitee_password / DEPLOY_SSH_HOST /
@@ -53,7 +53,7 @@ const argOf = (name) => {
   return i !== -1 && argv[i + 1] !== undefined ? argv[i + 1] : undefined
 }
 const DRY_RUN = argv.includes('--dry-run')
-const REMOTE_DIR = argOf('--remote-dir') ?? '/opt/ling-cordis'
+const REMOTE_DIR = argOf('--remote-dir') ?? '/opt/ling-coris'
 const CONTAINER = 'ling-hmr-react'
 const PORT = '8391'
 
@@ -69,7 +69,7 @@ function step(name, detail) {
 function tarContext(root) {
   const outDir = join(root, 'dist')
   mkdirSync(outDir, { recursive: true })
-  const fileName = `ling-cordis-rel-ctx-${Date.now()}.tgz`
+  const fileName = `ling-coris-rel-ctx-${Date.now()}.tgz`
   const run = spawnSync('tar', [
     '-czf', `../../dist/${fileName}`,
     // 排除项一律 ./ 根级锚定：GNU tar 的 --exclude 按成员名匹配任意层级——裸 'client'
@@ -108,7 +108,7 @@ function gates() {
 function publish() {
   const token = ENV.npmjs_access_token ?? ''
   if (token === '') throw new Error('.env 缺 npmjs_access_token——发 npm 需要凭据')
-  step('publish', `发 npm @ling2/ling-cordis@${pkgVersion}（prepublishOnly 自动跑三连门禁）`)
+  step('publish', `发 npm @ling2/ling-coris@${pkgVersion}（prepublishOnly 自动跑三连门禁）`)
   if (DRY_RUN) {
     console.log('  [dry-run] NODE_AUTH_TOKEN=*** pnpm publish --no-git-checks')
     return
@@ -134,8 +134,8 @@ function push() {
     return `https://${encodeURIComponent(user)}:${encodeURIComponent(pw)}@${m[1]}/${m[2]}`
   }
   const targets = [
-    ['origin', authed(ENV.GitHub_user, ENV.GitHub_password, 'https://github.com/ling2-2y2/ling-cordis.git', 'GitHub_user/GitHub_password')],
-    ['gitee', authed(ENV.gitee_user, ENV.gitee_password, 'https://gitee.com/ling2/ling-cordis.git', 'gitee_user/gitee_password')],
+    ['origin', authed(ENV.GitHub_user, ENV.GitHub_password, 'https://github.com/ling2-2y2/ling-coris.git', 'GitHub_user/GitHub_password')],
+    ['gitee', authed(ENV.gitee_user, ENV.gitee_password, 'https://gitee.com/ling2/ling-coris.git', 'gitee_user/gitee_password')],
   ]
   for (const [name, url] of targets) {
     if (url === undefined) continue
@@ -165,13 +165,13 @@ function remoteBuild(imageVersion) {
   const cmd = [
     `mkdir -p ${REMOTE_DIR}/hmr-react`,
     `&& tar xzf ${REMOTE_DIR}/hmr-react-ctx.tgz -C ${REMOTE_DIR}/hmr-react`,
-    `&& docker build --build-arg LING_CORDIS_VERSION=${imageVersion} -t ling-cordis/hmr-react:${imageVersion} ${REMOTE_DIR}/hmr-react`,
+    `&& docker build --build-arg LING_CORIS_VERSION=${imageVersion} -t ling-coris/hmr-react:${imageVersion} ${REMOTE_DIR}/hmr-react`,
   ].join(' ')
-  console.log(`  ▷ docker build（钉 LING_CORDIS_VERSION=${imageVersion}）…`)
+  console.log(`  ▷ docker build（钉 LING_CORIS_VERSION=${imageVersion}）…`)
   const run = remote('exec', { cmd, tail: 8000 }, 900_000)
   if (run.stdout !== undefined && run.stdout !== '') console.log(run.stdout.split('\n').slice(-12).join('\n'))
   if (!run.ok) throw new Error(`远端 docker build 失败：${(run.stderr ?? run.error ?? '').slice(-800)}`)
-  console.log(`  ✓ 镜像 ling-cordis/hmr-react:${imageVersion} 已在 129 构建`)
+  console.log(`  ✓ 镜像 ling-coris/hmr-react:${imageVersion} 已在 129 构建`)
 }
 
 // ── 节点⑤：129 上重建容器 ───────────────────────────────────────────────────
@@ -179,7 +179,7 @@ function remoteRun(imageVersion) {
   step('run', `129 重建容器 ${CONTAINER}（HOST=0.0.0.0，宿主端口 ${PORT}）`)
   const cmd = [
     `docker rm -f ${CONTAINER} >/dev/null 2>&1 || true`,
-    `&& docker run -d --name ${CONTAINER} -p ${PORT}:${PORT} -e HOST=0.0.0.0 -e PORT=${PORT} --restart unless-stopped ling-cordis/hmr-react:${imageVersion}`,
+    `&& docker run -d --name ${CONTAINER} -p ${PORT}:${PORT} -e HOST=0.0.0.0 -e PORT=${PORT} --restart unless-stopped ling-coris/hmr-react:${imageVersion}`,
   ].join(' ')
   const run = remote('exec', { cmd })
   if (!run.ok) throw new Error(`远端 docker run 失败：${(run.stderr ?? run.error ?? '').slice(-500)}`)

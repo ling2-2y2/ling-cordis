@@ -1,4 +1,4 @@
-# ling-cordis
+# ling-coris
 
 A standalone [cordis](https://github.com/koishijs/cordis)-lineage plugin runtime for TypeScript: composable **contexts**, lifecycle-managed **plugin fibers**, a typed **event bus**, **dependency-injected services**, **timer** mixins, **schema** validation (schemastery), and console **logging** — shipped as one dependency-free-to-consume ESM package.
 
@@ -39,13 +39,13 @@ flowchart TD
     MOD["business plugin modules<br/>cross-module: static inject + ctx.get<br/>(demo1/demo2 in examples, or a 34-entry platform tree)"]
     FE["browser SPA"]
   end
-  subgraph L3["/dev toolkit — import from '@ling2/ling-cordis/dev'"]
+  subgraph L3["/dev toolkit — import from '@ling2/ling-coris/dev'"]
     KERNEL["runDevApp carrier kernel<br/>env → Context → phased mounts → http faces → bounded shutdown"]
     GW["createRpcServer — empty shell<br/>+ jsonResponder / faceInvoker<br/>policies live in your layers"]
     HMR["createViteEmbed — in-process vite<br/>single-port HMR<br/>(vite is your peer dep, optional)"]
     UTILS["ModuleRegistry · build orchestration · link helpers"]
   end
-  subgraph L2["runtime — import from '@ling2/ling-cordis'"]
+  subgraph L2["runtime — import from '@ling2/ling-coris'"]
     CORE["Context tree · fibers · event bus · Service DI"]
     PLUGINS["Timer · LoggerConsole · schemastery"]
   end
@@ -78,14 +78,14 @@ flowchart TD
 ## Install
 
 ```bash
-npm install @ling2/ling-cordis
-# or: pnpm add @ling2/ling-cordis
+npm install @ling2/ling-coris
+# or: pnpm add @ling2/ling-coris
 ```
 
 ## Quick start
 
 ```ts
-import { Context, LoggerConsole, Service, Timer } from '@ling2/ling-cordis'
+import { Context, LoggerConsole, Service, Timer } from '@ling2/ling-coris'
 
 // A plugin is a service named 'hello' exposed as ctx.hello
 class Hello extends Service {
@@ -121,7 +121,7 @@ vite embed gives your dev server frontend HMR (React Fast Refresh included)
 without a second port or a child process:
 
 ```ts
-import { ModuleRegistry, buildRegisteredModules, createViteEmbed } from '@ling2/ling-cordis/dev'
+import { ModuleRegistry, buildRegisteredModules, createViteEmbed } from '@ling2/ling-coris/dev'
 
 // 1) one registry, three consumers (mounting / static table / builds)
 const registry = new ModuleRegistry(['core', 'tail'])
@@ -156,7 +156,7 @@ plus its HMR websocket upgrades. vite (and `@vitejs/plugin-react` when
 the whole dev server (a `vite.config.ts`-style experience):
 
 ```ts
-import { defineApp, runDevApp } from '@ling2/ling-cordis/dev'
+import { defineApp, runDevApp } from '@ling2/ling-coris/dev'
 
 const config = defineApp({
   rootDir: import.meta.dirname,
@@ -328,7 +328,7 @@ The canonical consumer image is
 [`examples/hmr-react/Dockerfile`](./examples/hmr-react/Dockerfile)
 (architecture review O4 + ruling batch 2026-10-26): **multi-stage** — the build
 stage installs full devDeps (vite/esbuild/plugin-react) and rewrites the three
-demo-form relative imports to the `@ling2/ling-cordis/dev` package export
+demo-form relative imports to the `@ling2/ling-coris/dev` package export
 (byte-for-byte what a real consumer does); the runtime stage carries only the
 artifacts (`dist/` + `client/`) plus the pinned framework package
 (`pnpm install --prod`) — no vite, no esbuild, no tsx in the runtime image.
@@ -339,11 +339,11 @@ framework's `/dev` surface reads no env itself).
 
 ```bash
 cd examples/hmr-react
-docker build -t ling-cordis/hmr-react:latest .          # daily build (framework pkg = npm latest)
-docker build --build-arg LING_CORDIS_VERSION=2.3.0 \
-  -t ling-cordis/hmr-react:2.3.0 .                      # pinned build (for releases)
+docker build -t ling-coris/hmr-react:latest .          # daily build (framework pkg = npm latest)
+docker build --build-arg LING_CORIS_VERSION=2.3.0 \
+  -t ling-coris/hmr-react:2.3.0 .                      # pinned build (for releases)
 docker run -d --name ling-hmr-react -p 8391:8391 \
-  -e HOST=0.0.0.0 ling-cordis/hmr-react:2.3.0            # run as non-root
+  -e HOST=0.0.0.0 ling-coris/hmr-react:2.3.0            # run as non-root
 ```
 
 Release pipeline (2026-10-26 ruling: local script orchestration, build &

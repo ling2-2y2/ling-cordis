@@ -11,7 +11,7 @@ const decoratorSyntax = /^\s*@[A-Za-z_$][\w$]*/m
 /** 在 Vite 默认解析器见到源码前，预转换标准 TS 装饰器。 */
 function standardDecoratorPlugin(): Plugin {
   return {
-    name: 'ling-cordis-standard-decorators',
+    name: 'ling-coris-standard-decorators',
     enforce: 'pre',
     transform(code: string, id: string) {
       const file = id.split('?', 1)[0]!

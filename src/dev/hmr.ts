@@ -14,7 +14,7 @@
  * 配置合成（2026-10-26 用户令「坑知识进框架」）：base 缺省 '/app/'、react:true 时
  * 注入 @vitejs/plugin-react、依赖预热入口约定探测——简单使用方零 vite.config 直享
  * React Fast Refresh HMR（ling-harness-runner 演示页为消费范本）。
- * @module @ling2/ling-cordis/dev/hmr
+ * @module @ling2/ling-coris/dev/hmr
  */
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'

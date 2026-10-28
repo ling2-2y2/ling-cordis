@@ -18,7 +18,7 @@
  * value 的审计件排在 invoker 之外**（发送前最后一站）；嵌套语义天然支持（ALS
  * 型请求上下文传播=普通中间件包 next()）。生命周期（onInit/onReady/onDestroy）
  * 挂层对象上，经 createRpcFace 的 ready/dispose 槽随 runDevApp 派发。
- * @module @ling2/ling-cordis/dev/rpc
+ * @module @ling2/ling-coris/dev/rpc
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { DevHttpFaceObject, DevHttpHandler } from './app.ts'

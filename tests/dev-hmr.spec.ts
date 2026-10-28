@@ -3,7 +3,7 @@
  * fail loud/未认领 next 透传/dispose 关停。替身=tests/helpers/fake-vite.ts 铺的
  * 假 vite 包（同进程 import+globalThis 台账，零子进程零端口）。/app 组合语义
  * （500 hmr-unclaimed、LNG_WEB_HMR=0 静态档）见 dev-app.spec.ts。
- * @module @ling2/ling-cordis/tests/dev-hmr
+ * @module @ling2/ling-coris/tests/dev-hmr
  */
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -79,7 +79,7 @@ describe('createViteEmbed', () => {
     shells.push(shell)
     await new Promise<void>((resolve) => shell.listen(0, '127.0.0.1', resolve))
     // 空临时目录：node_modules/vite 必然缺席
-    const cwd = join(tmpdir(), `ling-cordis-absent-vite-${Date.now()}`)
+    const cwd = join(tmpdir(), `ling-coris-absent-vite-${Date.now()}`)
     roots.push(cwd)
     const { mkdirSync } = await import('node:fs')
     mkdirSync(cwd, { recursive: true })

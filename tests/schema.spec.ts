@@ -1,6 +1,6 @@
 /**
  * schemastery 回归——构建器校验、默认值、错误面、volatile 机制往返。
- * @module @ling2/ling-cordis/tests/schema
+ * @module @ling2/ling-coris/tests/schema
  */
 import { describe, expect, it } from 'vitest'
 import { schemastery as z } from '../src/index.ts'

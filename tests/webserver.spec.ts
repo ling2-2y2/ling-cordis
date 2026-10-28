@@ -1,7 +1,7 @@
 /**
  * webserver 路由器回归钉（2026-10-24 归位批收编件）——注册三法对称拆卸、
  * 宿主同形分发语义（exact→最长前缀→fallback）、升级分派、clear 幂等。
- * @module @ling2/ling-cordis/tests/webserver
+ * @module @ling2/ling-coris/tests/webserver
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { describe, expect, it } from 'vitest'

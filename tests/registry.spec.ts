@@ -1,6 +1,6 @@
 /**
  * 插件注册表回归——@Inject 装饰器、Inject.resolve 归一、对象插件与注入栅栏。
- * @module @ling2/ling-cordis/tests/registry
+ * @module @ling2/ling-coris/tests/registry
  */
 import { describe, expect, it } from 'vitest'
 import { Context, Inject, Service } from '../src/index.ts'

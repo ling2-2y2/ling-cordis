@@ -1,6 +1,6 @@
 /**
  * 聚合出口回归钉——出口符号面 + Timer 装配行为 + Service 挂载。
- * @module @ling2/ling-cordis/tests/aggregation
+ * @module @ling2/ling-coris/tests/aggregation
  */
 import { describe, expect, it } from 'vitest'
 import { Context, LoggerConsole, Service, symbols, Timer, schemastery } from '../src/index.ts'
@@ -38,10 +38,10 @@ describe('聚合出口', () => {
     const ctx = new Context()
     class Probe extends Service {
       static inject = [] as const
-      constructor(c: Context) { super(c, 'ling-cordis-probe') }
+      constructor(c: Context) { super(c, 'ling-coris-probe') }
     }
     await ctx.plugin(Probe)
-    expect(ctx.get('ling-cordis-probe')).toBeInstanceOf(Probe)
+    expect(ctx.get('ling-coris-probe')).toBeInstanceOf(Probe)
     await ctx.fiber.dispose()
   })
 })

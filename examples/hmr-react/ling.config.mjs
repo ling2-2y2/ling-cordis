@@ -4,8 +4,8 @@
  *   消费者，React 插件在文件里，故 hmr 不设 react:true 防双开）；
  * - 产物（`pnpm build` 后 `pnpm start`）：staticApp 静态面（vite build 出的 dist）
  *   + `/packages/demo` 回产物通道（client/client.js）。
- * 消费者视角把 '../../src/dev/index.ts' 换成 '@ling2/ling-cordis/dev' 即同款。
- * @module @ling2/ling-cordis/examples/hmr-react/ling.config
+ * 消费者视角把 '../../src/dev/index.ts' 换成 '@ling2/ling-coris/dev' 即同款。
+ * @module @ling2/ling-coris/examples/hmr-react/ling.config
  */
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'

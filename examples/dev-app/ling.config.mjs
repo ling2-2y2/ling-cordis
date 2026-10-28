@@ -2,11 +2,11 @@
  * dev-app 演示配置——vite.config.ts 同款薄形态的完整最小样：三相插件挂载
  * （default/命名空间双出口形态）+ JSON-RPC 网关（内存凭据，零业务依赖）+
  * 静态 SPA + healthz。消费者视角把 '../../src/dev/index.ts' 换成
- * '@ling2/ling-cordis/dev' 即同款。
+ * '@ling2/ling-coris/dev' 即同款。
  *
  * 动态 import 说明符须绝对化且用 file:// URL（相对路径按内核文件解析不随本配置；
  * Windows 裸盘符路径非合法 ESM 说明符）——spec()/dir() 两助手即此用。
- * @module @ling2/ling-cordis/examples/dev-app/ling.config
+ * @module @ling2/ling-coris/examples/dev-app/ling.config
  */
 import { fileURLToPath } from 'node:url'
 import { createRpcFace, defineApp, faceInvoker, jsonResponder, readRequestBody, rpcSendJson } from '../../src/dev/index.ts'

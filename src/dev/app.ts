@@ -9,7 +9,7 @@
  * env 纪律：本内核不读任何环境变量——开关/端口/路径全部由配置传值；配置文件
  * 求值序契约=薄壳先 loadEnv('.env') 再动态 import 配置（配置体求值时 env 已在场，
  * 规避工厂函数自举环）。业务面（认证/RPC/面收编）经 http 挂件注入，框架零业务。
- * @module @ling2/ling-cordis/dev/app
+ * @module @ling2/ling-coris/dev/app
  */
 import { createReadStream, existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
@@ -166,7 +166,7 @@ const LING_BOOT_JS = [
   ';(() => {',
   "  if (typeof window === 'undefined') return",
   '  function showError(error) {',
-  "    console.error('[ling-cordis] 子应用装载失败', error)",
+  "    console.error('[ling-coris] 子应用装载失败', error)",
   "    const box = document.getElementById('root')",
   '    if (box) {',
   '      const pre = document.createElement(\'pre\')',
@@ -291,7 +291,7 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   const urlPrefix = staticConf?.urlPrefix ?? basePath
   const packagesTable: Record<string, string> = { ...registry.clientTable(config.rootDir), ...config.packagesExtras }
   // 客户端源码面表（dev 态 /packages 源码直供——2026-10-26 用户裁定①②「子应用真
-  // HMR、机制落 ling-cordis 框架」：注册表 client 键与 extras 键按约定自动发现
+  // HMR、机制落 ling-coris 框架」：注册表 client 键与 extras 键按约定自动发现
   // 源码入口，宿主零接线白拿；见下方 /packages 分派与 shim）
   const clientSourceTable = registry.clientSourceTable(config.rootDir, config.packagesExtras)
 

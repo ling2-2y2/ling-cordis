@@ -1,13 +1,13 @@
-# ling-cordis 标准消费者编排样例（docker compose up -d 即起）
-# 正式发布钉版：LING_CORDIS_VERSION 传具体版本号（scripts/release.mjs 自动带）；
+# ling-coris 标准消费者编排样例（docker compose up -d 即起）
+# 正式发布钉版：LING_CORIS_VERSION 传具体版本号（scripts/release.mjs 自动带）；
 # 缺省 latest=日常档（随 npm 最新走）
 services:
   hmr-react:
     build:
       context: .
       args:
-        LING_CORDIS_VERSION: "latest"
-    image: ling-cordis/hmr-react:latest
+        LING_CORIS_VERSION: "latest"
+    image: ling-coris/hmr-react:latest
     container_name: ling-hmr-react
     ports:
       - "8391:8391"

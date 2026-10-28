@@ -19,7 +19,7 @@ framework runtime.
 
 3. **This repository** — extracted, restructured (`src/core`, `src/kit`,
    `src/schema`, `src/plugins`), rebranded and republished as
-   `@ling2/ling-cordis`.
+   `@ling2/ling-coris`.
 
 ## Module mapping
 

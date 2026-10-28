@@ -5,7 +5,7 @@
  *   pnpm dev --check    # dev 自检 5 项（healthz·vite-embedded/装载器路由/自动装载路由/源码面 shim/宿主页）
  *   pnpm build          # 编译产物（子应用 client/client.js+壳 dist/——见 build.mjs）
  *   pnpm start          # 产物形态常驻（吃 build 产物，无 vite）；自检加 --check
- * @module @ling2/ling-cordis/examples/hmr-react/boot
+ * @module @ling2/ling-coris/examples/hmr-react/boot
  */
 import { runDevApp } from '../../src/dev/index.ts'
 import config, { product } from './ling.config.mjs'

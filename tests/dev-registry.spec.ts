@@ -1,6 +1,6 @@
 /**
  * ModuleRegistry 回归——相过滤/重复与越相拒绝/静态表派生/find。
- * @module @ling2/ling-cordis/tests/dev-registry
+ * @module @ling2/ling-coris/tests/dev-registry
  */
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'

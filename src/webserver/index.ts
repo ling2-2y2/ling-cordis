@@ -19,7 +19,7 @@
  *
  * 诊断位（观测面，随收编保留）：onMiss 首未命中观测、instanceId 实例指纹
  * （同进程双副本拓扑追查）、dumpKeysOnFirstMiss 键位 dump 辅位。
- * @module @ling2/ling-cordis/webserver
+ * @module @ling2/ling-coris/webserver
  */
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'

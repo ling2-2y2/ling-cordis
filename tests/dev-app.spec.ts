@@ -2,7 +2,7 @@
  * runDevApp 载体内核回归——三相序/spec 双形态/HTTP 内建面（healthz 附加位·重定向·
  * 静态 SPA·包表·strip 前缀）/dispose 链（setup 清理器+face 清理器）/HMR 组合。
  * 全部用临时端口+编程式 dispose 句柄，进程不悬挂。
- * @module @ling2/ling-cordis/tests/dev-app
+ * @module @ling2/ling-coris/tests/dev-app
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -64,7 +64,7 @@ describe('runDevApp', () => {
   })
 
   it('404 首见告警去重：同 miss 只告警首见、不同 miss 各告警（missedRoutes 观测面——路由机制迁移防丢钉）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-dedup-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-dedup-'))
     roots.push(root)
     const port = await freePort()
     const app = await runDevApp({ rootDir: root, port, phases: ['only'], modules: [] })
@@ -88,7 +88,7 @@ describe('runDevApp', () => {
   })
 
   it('静态资产流式下发：1MB 资产完整不截断；登记键物理缺席走 404（O7 流式化钉）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-stream-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-stream-'))
     roots.push(root)
     const staticRoot = join(root, 'web')
     mkdirSync(staticRoot)
@@ -117,7 +117,7 @@ describe('runDevApp', () => {
   })
 
   it('HTTP 内建面：挂件先行（strip 前缀）+healthz 附加位+重定向+静态 SPA+包表+404', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const staticRoot = join(root, 'web')
     mkdirSync(staticRoot)
@@ -178,7 +178,7 @@ describe('runDevApp', () => {
   it('HMR 组合（内嵌形态）：/app 由假 vite 应答；未认领 → 500 hmr-unclaimed（禁回落 dist）', async () => {
     const cwd = createFakeViteProject()
     roots.push(cwd)
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const staticRoot = join(root, 'web')
     mkdirSync(staticRoot)
@@ -209,7 +209,7 @@ describe('runDevApp', () => {
   it('ws 升级分派：vite HMR 认领面放行（不被兜底 destroy 掐死）、他面路径照常销毁', async () => {
     const cwd = createFakeViteProject()
     roots.push(cwd)
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const port = await freePort()
     const app = await runDevApp({
@@ -250,7 +250,7 @@ describe('runDevApp', () => {
   }, 20000)
 
   it('客户端源码面：dev 态注册表 client 键改发 ESM 转接 shim（@fs 源码入口+装载器注册）；纯资产 extras 仍走产物', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     // 假包：约定源码入口 src/client/index.ts + 产物 client/client.js
     const pkg = join(root, 'fake-pkg')
@@ -289,7 +289,7 @@ describe('runDevApp', () => {
   })
 
   it('客户端源码面：产物态（无 vite 内嵌）client 键=产物文件原样（回归钉）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const pkg = join(root, 'fake-pkg')
     mkdirSync(join(pkg, 'src', 'client'), { recursive: true })
@@ -309,7 +309,7 @@ describe('runDevApp', () => {
   })
 
   it('HMR 内嵌+依赖缺席：runDevApp 拒启（fail loud，不静默回落 dist）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const port = await freePort()
     await expect(runDevApp({
@@ -323,7 +323,7 @@ describe('runDevApp', () => {
   })
 
   it('框架装载器路由：/__ling/boot.js 与 /app/__ling/boot.js 同源应答（内容=装载面+运行时装载正路）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const port = await freePort()
     const app = await runDevApp({ rootDir: root, port, phases: ['only'], modules: [] })
@@ -343,7 +343,7 @@ describe('runDevApp', () => {
   })
 
   it('子应用自动装载路由：/__ling/main.js = 装载器+ling.config 键序自动装载（src/shell.ts 退役件）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const port = await freePort()
     const app = await runDevApp({
@@ -381,7 +381,7 @@ describe('runDevApp', () => {
   })
 
   it('/app/packages/* 别名（dev 态坑吸收）：base 前缀形态回源码面 shim；产物态不别名（404 不误吞）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const pkg = join(root, 'fake-pkg')
     mkdirSync(join(pkg, 'src', 'client'), { recursive: true })
@@ -422,7 +422,7 @@ describe('runDevApp', () => {
   })
 
   it('hmr 显式关（enabled:false）：/app 走 dist 静态档（逃生口保留）', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-app-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-app-'))
     roots.push(root)
     const staticRoot = join(root, 'web')
     mkdirSync(staticRoot)
@@ -459,7 +459,7 @@ describe('配置助手', () => {
   })
 
   it('loadEnv：文件解析+defaults 注入+不覆盖显式在场值', () => {
-    const root = mkdtempSync(join(tmpdir(), 'ling-cordis-env-'))
+    const root = mkdtempSync(join(tmpdir(), 'ling-coris-env-'))
     roots.push(root)
     const file = join(root, '.env')
     writeFileSync(file, 'LC_TEST_A=from-file\nLC_TEST_B="quoted"\n# comment\n')

@@ -2,7 +2,7 @@
  * 子应用协议入口——dev 态经 /packages/demo 源码面（ESM 转接 shim → vite /app/@fs
  * 直拉本文件）进宿主装载器；产物态同键走 client/client.js 产物（pnpm build 生成）。
  * 协议形状 export { inject, apply } 与业务包子应用同形。
- * @module @ling2/ling-cordis/examples/hmr-react/src/client/index
+ * @module @ling2/ling-coris/examples/hmr-react/src/client/index
  */
 import { createRoot } from 'react-dom/client'
 import { DemoView } from './DemoView.tsx'

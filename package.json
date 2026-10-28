@@ -1,6 +1,6 @@
 {
-  "name": "@ling2/ling-cordis",
-  "version": "2.3.0",
+  "name": "@ling2/ling-coris",
+  "version": "0.0.1",
   "description": "Standalone cordis runtime: contexts, plugin fibers, event bus, services, timer, schema validation (schemastery), and console logging — plus a /dev toolkit (module registry, vite HMR bridge, build orchestration).",
   "type": "module",
   "license": "MIT",
@@ -8,7 +8,7 @@
   "author": "ling2-2y2",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ling2-2y2/ling-cordis.git"
+    "url": "git+https://github.com/ling2-2y2/ling-coris.git"
   },
   "sideEffects": false,
   "main": "./dist/index.js",

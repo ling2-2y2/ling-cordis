@@ -1,6 +1,6 @@
 /**
  * 物理层接线助手回归——junction 幂等/悬空清理/shim 桥重写相对路径。
- * @module @ling2/ling-cordis/tests/dev-link
+ * @module @ling2/ling-coris/tests/dev-link
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 function tmpRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'ling-cordis-link-'))
+  const root = mkdtempSync(join(tmpdir(), 'ling-coris-link-'))
   roots.push(root)
   return root
 }

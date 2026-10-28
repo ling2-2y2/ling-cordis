@@ -1,12 +1,12 @@
 /**
- * 子应用产物构建件（2026-10-26 用户令「build 过程收归 ling-cordis」）——消费方
+ * 子应用产物构建件（2026-10-26 用户令「build 过程收归 ling-coris」）——消费方
  * （ling-web 形态多子应用平台的各子应用包）不再手写 esbuild 包装：本件打包
  * `src/client` 源码入口为单文件 cjs 产物，并包成**子应用协议注册器**
  * （`window.__ModuleLoader__.load({id, factory})`——与 dev 态 ESM 转接 shim 同
  * 一装载面，宿主页 dev/产物两形态零改动）。
  * esbuild 是使用方的对等件（从 entry 所在包自备解析；缺席/越界 fail loud——
  * 同 hmr.ts 的 vite 契约）。react 族是否内联归消费方（external 透传）。
- * @module @ling2/ling-cordis/dev/client-bundle
+ * @module @ling2/ling-coris/dev/client-bundle
  */
 import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -84,7 +84,7 @@ export async function buildClientBundle(options: ClientBundleOptions): Promise<n
     ...options.esbuild,
   })
   const code = result.outputFiles[0]?.text ?? ''
-  const banner = options.banner ?? '// 子应用产物（ling-cordis buildClientBundle 生成；dev 态此文件不被消费——/packages 源码面直供）'
+  const banner = options.banner ?? '// 子应用产物（ling-coris buildClientBundle 生成；dev 态此文件不被消费——/packages 源码面直供）'
   const wrapped = [
     banner,
     '(function () {',

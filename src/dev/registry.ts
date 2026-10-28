@@ -4,7 +4,7 @@
  * 条目数据（业务包清单）由消费方持有，本模块只提供形状校验与派生查询：
  * 挂载循环（ofPhase）、静态通道表（clientTable）、编译编排（./build.ts）
  * 三处消费同一注册表——改一处三处同生效。
- * @module @ling2/ling-cordis/dev/registry
+ * @module @ling2/ling-coris/dev/registry
  */
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,7 +21,7 @@ export interface ModuleEntry<TEnv = unknown> {
   /** 浏览器产物：key=静态通道键；path=产物相对包目录路径，缺省 'client/client.js'；
    * entry=**源码入口**相对包目录路径（dev 态客户端源码面直供用），缺省按约定
    * 依存在探测 src/client/index.tsx → src/client/index.ts（2026-10-26 用户裁定
-   * 「子应用真 HMR、机制落框架」—— ling-cordis 内建，见 app.ts /packages 分派）。 */
+   * 「子应用真 HMR、机制落框架」—— ling-coris 内建，见 app.ts /packages 分派）。 */
   client?: { key: string; path?: string; entry?: string }
   /** 挂载函数（装配方在相循环内调用；env=装配方构造的挂载环境，形状自定）。 */
   mount?: (ctx: Context, env: TEnv) => void | Promise<void>

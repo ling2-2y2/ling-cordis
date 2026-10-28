@@ -1,6 +1,6 @@
 /**
  * 事件总线回归——on/emit、once、parallel/serial 顺序、bail 短路与 waterfall 链传。
- * @module @ling2/ling-cordis/tests/events
+ * @module @ling2/ling-coris/tests/events
  */
 import { describe, expect, it } from 'vitest'
 import { Context, isBailed } from '../src/index.ts'

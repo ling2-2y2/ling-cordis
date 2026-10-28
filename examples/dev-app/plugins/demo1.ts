@@ -2,8 +2,8 @@
  * 演示模块 demo1（default 出口形态）——被跨模块消费的底层能力方：
  * 具名服务 'demo1'，能力面由 Demo1Api 接口显式契约化（消费方 import 该类型，
  * 跨模块契约不靠猜）。
- * 消费者视角：`import { Service, type Context } from '@ling2/ling-cordis'`。
- * @module @ling2/ling-cordis/examples/dev-app/plugins/demo1
+ * 消费者视角：`import { Service, type Context } from '@ling2/ling-coris'`。
+ * @module @ling2/ling-coris/examples/dev-app/plugins/demo1
  */
 import { Service, type Context } from '../../../src/index.ts'
 

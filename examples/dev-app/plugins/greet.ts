@@ -1,9 +1,9 @@
 /**
  * 演示插件甲（default 出口形态：class 插件）——挂在 ctx.greet 上的服务，
  * 同时充当 RPC 面本体（ling.config.mjs 把它登记进网关 faces 表）。
- * 消费者视角：`import { Service } from '@ling2/ling-cordis'`
+ * 消费者视角：`import { Service } from '@ling2/ling-coris'`
  * （仓内演示走源码相对路径，免构建直跑）。
- * @module @ling2/ling-cordis/examples/dev-app/plugins/greet
+ * @module @ling2/ling-coris/examples/dev-app/plugins/greet
  */
 import { Service, type Context } from '../../../src/index.ts'
 

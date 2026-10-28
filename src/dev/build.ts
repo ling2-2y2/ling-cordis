@@ -5,7 +5,7 @@
  *
  * 子进程 stdio 直通（看得到每包进度）；任一失败即抛 BuildFailedError 中止后续，
  * 错误携子进程退出码供调用方透传 `process.exit`。
- * @module @ling2/ling-cordis/dev/build
+ * @module @ling2/ling-coris/dev/build
  */
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'

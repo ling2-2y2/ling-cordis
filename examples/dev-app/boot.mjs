@@ -5,7 +5,7 @@
  *   node --import tsx/esm examples/dev-app/boot.mjs --check   # 自检档 7 项：登录+RPC 参数绑定
  *                                                             #   +会话门+跨模块前后端两腿
  *                                                             #   +healthz+静态页（CI）
- * @module @ling2/ling-cordis/examples/dev-app/boot
+ * @module @ling2/ling-coris/examples/dev-app/boot
  */
 import { runDevApp } from '../../src/dev/index.ts'
 import config from './ling.config.mjs'
@@ -20,7 +20,7 @@ if (process.argv.includes('--check')) {
     body: JSON.stringify(body),
   }).then((res) => res.json())
   const login = await post('/api/auth/login', { account: 'demo', password: '123456' })
-  const hello = await post('/api/demo/hello', { args: { name: 'ling-cordis' } }, login.token)
+  const hello = await post('/api/demo/hello', { args: { name: 'ling-coris' } }, login.token)
   const denied = await post('/api/demo/hello', { args: {} })
   const direct = await post('/api/demo1/double', { args: { n: 21 } }, login.token)
   const cross = await post('/api/demo2/report', { args: { n: 21 } }, login.token)
@@ -28,7 +28,7 @@ if (process.argv.includes('--check')) {
   const page = await fetch(`${base}/app/`).then((r) => r.text())
   const checks = [
     ['登录发牌', login.ok === true],
-    ['RPC 参数绑定（args 按名入参）', hello.ok === true && hello.value === 'hello, ling-cordis!'],
+    ['RPC 参数绑定（args 按名入参）', hello.ok === true && hello.value === 'hello, ling-coris!'],
     ['会话门拦未登录', denied.ok === false],
     ['前端跨模块：demo1 直调（/api/demo1/double）', direct.ok === true && direct.value === 42],
     ['后端跨模块：demo2.report 内部穿透 demo1.double', cross.ok === true && cross.value.doubled === 42 && cross.value.via === 'demo1'],

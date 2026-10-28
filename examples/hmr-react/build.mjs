@@ -2,10 +2,10 @@
  * `pnpm build`——编译产物两件（直调，不经 npm 脚本编排）：
  * ①壳：vite build（配置 vite.config.ts）出 dist/（index.html+hashed 资产，
  *   产物形态 staticApp 根）；
- * ②子应用：ling-cordis 框架件 buildClientBundle 打包 src/client → client/client.js
+ * ②子应用：ling-coris 框架件 buildClientBundle 打包 src/client → client/client.js
  *   子应用协议注册器（与 dev 态 ESM shim 同装载面，宿主页零改动）。
  * 跑完 `PRODUCT=1 pnpm start` 即产物形态启动（无需 vite）。
- * @module @ling2/ling-cordis/examples/hmr-react/build
+ * @module @ling2/ling-coris/examples/hmr-react/build
  */
 import { build as viteBuild } from 'vite'
 import { buildClientBundle } from '../../src/dev/index.ts'

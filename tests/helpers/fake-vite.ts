@@ -6,7 +6,7 @@
  *   middlewares——URL 含 `/__next` 时走 next()（未认领透传），其余应答
  *   `fake-vite <url>`；close() 台账记 closed+1。
  * - 不实现 HMR ws（真实 vite 的 hmr.server 升级行为属本地真机轮判据，不在单测面）。
- * @module @ling2/ling-cordis/tests/helpers/fake-vite
+ * @module @ling2/ling-coris/tests/helpers/fake-vite
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -70,7 +70,7 @@ export interface FakeViteProjectOptions {
 
 /** 铺假 vite 项目（临时目录），返回其绝对路径（作 createViteEmbed 的 cwd）。 */
 export function createFakeViteProject(options: FakeViteProjectOptions = {}): string {
-  const root = mkdtempSync(join(tmpdir(), 'ling-cordis-fake-vite-'))
+  const root = mkdtempSync(join(tmpdir(), 'ling-coris-fake-vite-'))
   mkdirSync(join(root, 'node_modules', 'vite'), { recursive: true })
   writeFileSync(join(root, 'package.json'), `${JSON.stringify({ name: 'fake-vite-project', private: true, type: 'module' }, null, 2)}\n`)
   writeFileSync(

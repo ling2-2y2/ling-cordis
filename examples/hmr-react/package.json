@@ -1,10 +1,10 @@
 {
-  "name": "ling-cordis-example-hmr-react",
+  "name": "ling-coris-example-hmr-react",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.12.0",
-  "description": "ling-cordis 前端 HMR 最小示例。项目标配三命令：pnpm dev=HMR 开发环境（vite 内嵌同进程单端口+子应用源码面）；pnpm build=编译产物（壳 dist/+子应用 client/client.js）；PRODUCT=1 pnpm start=产物形态启动。依赖自备（vite/@vitejs/plugin-react/esbuild 为使用方对等件，框架缺席即拒启）：cd examples/hmr-react && pnpm install --ignore-workspace",
+  "description": "ling-coris 前端 HMR 最小示例。项目标配三命令：pnpm dev=HMR 开发环境（vite 内嵌同进程单端口+子应用源码面）；pnpm build=编译产物（壳 dist/+子应用 client/client.js）；PRODUCT=1 pnpm start=产物形态启动。依赖自备（vite/@vitejs/plugin-react/esbuild 为使用方对等件，框架缺席即拒启）：cd examples/hmr-react && pnpm install --ignore-workspace",
   "scripts": {
     "dev": "node --import tsx boot.mjs",
     "start": "node --import tsx boot.mjs --product",

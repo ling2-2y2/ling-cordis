@@ -1,6 +1,6 @@
 /**
  * Context 根容器回归——品牌判定、静态符号、子作用域与服务可达性。
- * @module @ling2/ling-cordis/tests/context
+ * @module @ling2/ling-coris/tests/context
  */
 import { describe, expect, it } from 'vitest'
 import { Context, EventsService, RegistryService, Service } from '../src/index.ts'
