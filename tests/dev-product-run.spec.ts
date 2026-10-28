@@ -92,4 +92,28 @@ describe('runDevApp 产物档（productBase）', () => {
     expect(mounted).toEqual(['product:ns2'])
     await app.dispose()
   })
+
+  it('specToPath 返回空值=该说明符不经产物树、保持原样解析（非镜像族透传语义）', async () => {
+    const { outDir } = makeProductTree()
+    const port = await freePort()
+    // 产物档下混一条非镜像族说明符：specToPath 对其返回 null → 原样 bare import
+    // （经 node_modules 解析——本测以另一产物树内路径的 fixture 充当可解析目标）
+    const fixtureNs = (await import('node:url')).pathToFileURL(
+      (await import('node:path')).join(outDir, 'ling-fake', 'src', 'index.js'),
+    ).href
+    const app = await runDevApp({
+      rootDir: '.',
+      port,
+      phases: ['only'],
+      productBase: {
+        base: `${pathToFileURL(outDir).href}/`,
+        specToPath: (spec) => (spec.startsWith('@ling/') ? 'ling-fake/src/index.js' : null),
+      },
+      modules: [{ id: 'p-passthrough', phase: 'only', spec: fixtureNs, config: { mark: 'ns3' } }],
+    })
+    apps.push(app)
+    const { mounted } = await import(`${pathToFileURL(outDir).href}/ling-fake/src/index.js`)
+    expect(mounted).toEqual(['product:ns3'])
+    await app.dispose()
+  })
 })

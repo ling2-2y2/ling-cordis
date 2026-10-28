@@ -271,11 +271,13 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
   // 三相挂载循环（spec→plugin→after；数组登记序即挂载序）
   const registry = registryOf(config)
   // spec 解析单点：产物档=经 specToPath 映射为产物树 file URL（零 tsx 零源码）；
-  // 源码态=原样（tsx paths/裸名解析归运行时）。
+  // 源码态=原样（tsx paths/裸名解析归运行时）。specToPath 返回空值=非镜像族
+  // 透传：该说明符不经产物树、保持原样解析（node_modules 等常规通道）。
   const resolveSpec = (spec: string): string => {
     if (config.productBase === undefined) return spec
     const { base, specToPath } = config.productBase
     const productPath = specToPath !== undefined ? specToPath(spec) : spec.replace(/\.ts$/, '.js')
+    if (productPath == null || productPath === false) return spec
     return `${base}${productPath}`
   }
   for (const phase of config.phases) {
