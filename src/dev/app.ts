@@ -80,8 +80,9 @@ export type DevHttpFace = DevHttpHandler | DevHttpFaceObject
 export interface ProductBaseConfig {
   /** 产物树基址（file URL，尾含 /）。 */
   base: string
-  /** 说明符→产物相对路径（缺省=原样并尾换 .ts→.js）。 */
-  specToPath?: (spec: string) => string
+  /** 说明符→产物相对路径（缺省=原样并尾换 .ts→.js）。返回空值=非镜像族透传：
+   *  该说明符不经产物树、保持原样解析（node_modules 等常规通道）。 */
+  specToPath?: (spec: string) => string | null | undefined
 }
 
 /** 载体配置（声明式；env 取值在配置体内算——薄壳先 loadEnv 再 import 本配置）。 */
@@ -277,7 +278,7 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
     if (config.productBase === undefined) return spec
     const { base, specToPath } = config.productBase
     const productPath = specToPath !== undefined ? specToPath(spec) : spec.replace(/\.ts$/, '.js')
-    if (productPath == null || productPath === false) return spec
+    if (productPath == null) return spec
     return `${base}${productPath}`
   }
   for (const phase of config.phases) {
