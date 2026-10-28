@@ -71,6 +71,19 @@ export interface DevHttpFaceObject {
 /** HTTP 面挂件：纯处理器或对象形态。 */
 export type DevHttpFace = DevHttpHandler | DevHttpFaceObject
 
+/** 产物档配置（批① 2026-10-28：服务端产物规范化）。在场=产物形态——相位条目的
+ *  spec 先经映射换算为产物树 file URL 再动态 import（裸 node 直载产物 .js，零
+ *  tsx、零源码消费——「源码泄露不可接受」2026-10-27 用户裁定升格框架规范）。
+ *  映射约定归消费方（specToPath；缺省=原样+尾换 .ts→.js）；产物树由
+ *  buildProductTree 产（见 product-build.ts）。HMR/浏览器面与产物档互斥归
+ *  消费方配置（产物档 hmr.enabled=false、staticApp 指产物位）。 */
+export interface ProductBaseConfig {
+  /** 产物树基址（file URL，尾含 /）。 */
+  base: string
+  /** 说明符→产物相对路径（缺省=原样并尾换 .ts→.js）。 */
+  specToPath?: (spec: string) => string
+}
+
 /** 载体配置（声明式；env 取值在配置体内算——薄壳先 loadEnv 再 import 本配置）。 */
 export interface DevAppConfig {
   /** 树根绝对路径（/packages 表与 carrier 的基準；配置体内 import.meta.dirname 取）。 */
@@ -109,6 +122,8 @@ export interface DevAppConfig {
   phases: readonly string[]
   /** 相位条目（登记序即挂载序）。 */
   modules: DevAppEntry[]
+  /** 产物档（在场=spec 经映射指产物树 file URL——源码态缺省行为不变）。 */
+  productBase?: ProductBaseConfig
   /** 装配首站钩子（LoggerConsole/Timer 之后、相循环之前）；返回函数=停机清理器。 */
   setup?: (ctx: Context) => void | Promise<void> | (() => void)
   /** HTTP 面挂件工厂（相循环之后调用；返回纯处理器或对象形态的数组）。 */
@@ -255,10 +270,18 @@ export async function runDevApp(config: DevAppConfig): Promise<DevAppHandle> {
 
   // 三相挂载循环（spec→plugin→after；数组登记序即挂载序）
   const registry = registryOf(config)
+  // spec 解析单点：产物档=经 specToPath 映射为产物树 file URL（零 tsx 零源码）；
+  // 源码态=原样（tsx paths/裸名解析归运行时）。
+  const resolveSpec = (spec: string): string => {
+    if (config.productBase === undefined) return spec
+    const { base, specToPath } = config.productBase
+    const productPath = specToPath !== undefined ? specToPath(spec) : spec.replace(/\.ts$/, '.js')
+    return `${base}${productPath}`
+  }
   for (const phase of config.phases) {
     for (const entry of registry.ofPhase(phase) as DevAppEntry[]) {
       if (entry.spec !== undefined) {
-        const mod = await import(entry.spec)
+        const mod = await import(resolveSpec(entry.spec))
         const plugin = entry.use === 'default' ? mod.default : mod
         // config 省略即传 undefined（ctx.plugin(P) ≠ ctx.plugin(P, {})——`config ?? 缺省档`
         // 形态的插件族会走岔；签名必填故显式 undefined 保真语义）

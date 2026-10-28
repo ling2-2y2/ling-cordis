@@ -210,7 +210,7 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
 | 命令 | 角色 |
 | --- | --- |
 | `pnpm dev` | 开发环境（HMR）：vite 内嵌同进程单端口起服，开 `/app/` 改 `src/client/DemoView.tsx` 即时热更；`--check` 跑 5 项自检 |
-| `pnpm build` | 编译产物两件：壳 `dist/`（vite build）+ 子应用 `client/client.js`（框架件 `buildClientBundle` 包成子应用协议注册器） |
+| `pnpm build` | 编译产物两件：壳 `dist/`（vite build）+ 子应用 `client/client.js`（框架件 `buildClientBundle` 包成子应用协议注册器）；带服务端产物树的消费方再叠 `buildProductTree`（见下节） |
 | `pnpm start` | 产物启动：吃 build 产物、无 vite，同一页面同一装载面；`--check` 自检 |
 
 另一消费范本=`ling-harness-runner`（容器形态：与 sample 同款三命令与源码直载
@@ -228,6 +228,17 @@ await runDevApp(config) // env → Context → 相循环 → HTTP+HMR+静态 →
   （`warnBytes` 可调）；dev 态无此问题（vite 模块图天然单 React）。
 - **构建编排**：`buildRegisteredModules({ registry, rootDir, carrier })`——逐包
   `build:client` + 载体壳目标（`vite build`）；范本=`examples/hmr-react` 的 `pnpm build`。
+- **服务端产物树**（批① 2026-10-28 服务端产物规范化）：
+  `buildProductTree({ rootDir, packages, tsconfig, outDir, rewritePaths,
+  scopePrefixes, extraRootDirs?, legacyPkgPrefixes?, clean? })`——tsc 整树镜像
+  转译→运行时资产/包元数据镜像→跨包裸名反写（paths 单源派生，产物自包含：
+  残留裸名仅许 npm 包与 node 内建）→入口 `node --check` 验查→落
+  `product-manifest.json`（包/入口/junction 三段清单——镜像链原位 install 替换
+  junction 的消费单源）。消费范本=bsh 树 `scripts/build/build-host.mjs`（持清单
+  调引擎）。**产物态零源码铁律（框架法条）**：产物形态运行禁 tsx、禁源码消费
+  ——源码泄露不可接受（2026-10-27 用户裁定升格）；配套 `runDevApp` 产物档
+  `productBase: { base, specToPath? }`——在场=相位条目 spec 经映射换算为产物树
+  file URL 再动态 import（裸 node 直载产物 .js），源码态行为零变化。
 - **类型检查编排**：`runCheckScripts({ targets })` / `checkRegisteredModules`——
   逐包跑 `check` 脚本、聚合报告（败不抛）。
 - **主题门**：`themeGate({ tokenSheets, bundles, allowedVars, allowedPrefixes,

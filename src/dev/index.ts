@@ -10,6 +10,7 @@
 export { ModuleRegistry, type ModuleEntry } from './registry.ts'
 export { createViteEmbed, type ViteEmbed, type ViteEmbedOptions } from './hmr.ts'
 export { buildRegisteredModules, BuildFailedError, type BuildRegisteredOptions } from './build.ts'
+export { buildProductTree, deriveRewriteMap, resolveSpecifierToProduct, rewriteAliasSpecifiers, walkProductFiles, writeProductManifest, type ProductBuildOptions, type ProductBuildResult, type ProductManifest, type ProductManifestJunction, type RewriteMap, type RewritePrefix, type RewriteResult } from './product-build.ts'
 export { runCheckScripts, checkRegisteredModules, type CheckReport, type CheckTarget } from './check.ts'
 export { themeGate, collectThemeTokens, printThemeGateResult, stripCommentsLine, type ThemeGateFinding, type ThemeGateOptions, type ThemeGateResult } from './theme-gate.ts'
 export { buildClientBundle, type ClientBundleOptions } from './client-bundle.ts'
